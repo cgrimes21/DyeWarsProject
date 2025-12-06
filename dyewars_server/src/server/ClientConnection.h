@@ -51,7 +51,7 @@ private:
 
     void OnHandshakeTimeout(const std::error_code &ec);
 
-    void HandleHandshakePacket(const std::vector<uint8_t> &data);
+    void CheckIfHandshakePacket(const std::vector<uint8_t> &data);
 
     void CompleteHandshake();
 

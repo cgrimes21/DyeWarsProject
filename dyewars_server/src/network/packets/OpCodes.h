@@ -46,7 +46,6 @@ struct OpCodeInfo {
 namespace Protocol::Opcode {
     enum class ServerOpcode : uint8_t {
         Handshake_Accepted = 0xF0,
-
     };
     namespace Server {
         // ========================================================================
@@ -58,7 +57,7 @@ namespace Protocol::Opcode {
             //constexpr uint8_t S_Handshake_Accepted = 0xF0;
             constexpr OpCodeInfo S_HandshakeAccepted = {
                     0xF0,
-                    "Server sending to client that their handshake was successful.",
+                    "Server sending to client that client's handshake was successful.",
                     "Handshake Accepted",
                     false,
                     6};
@@ -797,4 +796,4 @@ namespace Protocol::OpcodeUtil {
         return "Unknown";
     }
 
-} // namespace Protocol::OpcodeUtil
+}

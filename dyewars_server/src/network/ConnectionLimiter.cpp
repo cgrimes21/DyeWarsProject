@@ -24,9 +24,11 @@ void ConnectionLimiter::AddConnection(const std::string &ip) {
 void ConnectionLimiter::RemoveConnection(const std::string &ip) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = connections_.find(ip);
-    if (it != connections_.end()) {
-        if (--it->second <= 0)
-            connections_.erase(it);
+    if (it == connections_.end()) {
+        return;
+    }
+    if (--it->second <= 0) {
+        connections_.erase(it);
     }
 }
 

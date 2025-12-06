@@ -47,6 +47,8 @@ add_executable(DyeWarsServer ${SOURCES} ${HEADERS}
         src/game/TileMap.h
         src/game/actions/Actions.cpp
         src/game/actions/MoveActions.cpp
+        src/database/DatabaseManager.cpp
+        src/data/GameDataManager.h
 )
 
 # Link libraries

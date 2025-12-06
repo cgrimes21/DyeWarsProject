@@ -175,13 +175,11 @@ void ClientConnection::ReadPacketPayload(uint16_t size) {
                              Disconnect("read error");
                              return;
                          }
-
-
                          BandwidthMonitor::Instance().RecordIncoming(size + 4);  // payload + header
                          LogPacketReceived(*buffer, size);
                          // If handshake not complete, this must be the handshake packet
                          if (!handshake_complete_) {
-                             HandleHandshakePacket(*buffer);
+                             CheckIfHandshakePacket(*buffer);
                          } else {
                              HandlePacket(*buffer);
                          }
@@ -224,7 +222,7 @@ void ClientConnection::OnHandshakeTimeout(const std::error_code &ec) {
     }
 }
 
-void ClientConnection::HandleHandshakePacket(const std::vector<uint8_t> &data) {
+void ClientConnection::CheckIfHandshakePacket(const std::vector<uint8_t> &data) {
     /// \note
     /// Expected format:\n
     /// Byte 0: Opcode (0x00)\n
@@ -272,8 +270,11 @@ void ClientConnection::CompleteHandshake() {
 void ClientConnection::FailHandshake(const std::string &reason) {
     Log::Warn("IP: {} Hostname: {} handshake failed because: {}.", client_ip_, client_hostname_, reason);
     server_->Limiter().RecordFailure(client_ip_);
+    server_->Limiter().RemoveConnection(client_ip_);
     LogFailedConnection(reason);
-    Disconnect(reason);
+    handshake_timer_.cancel();
+    CloseSocket();
+    //Disconnect(reason);
 }
 
 /// =============================\n

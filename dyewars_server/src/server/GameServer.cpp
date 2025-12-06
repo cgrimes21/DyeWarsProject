@@ -114,6 +114,10 @@ void GameServer::GameLogicThread() {
 
     Log::Info("Game loop started ({} ticks/sec)", TICKS_PER_SECOND);
 
+    // Measuring Tick Lag
+    double total_ms = 0;
+    int tick_count = 0;
+
     while (server_running_) {
         auto start_time = std::chrono::steady_clock::now();
 
@@ -124,7 +128,23 @@ void GameServer::GameLogicThread() {
         // 2. Sleep until next tick
         //auto end_time = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        if (auto elapsed = std::chrono::steady_clock::now() - start_time; elapsed < TICK_RATE) {
+
+        auto elapsed = std::chrono::steady_clock::now() - start_time;
+        auto ms = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count() / 1000.0;
+
+        total_ms += ms;
+        tick_count++;
+
+        if (tick_count >= 100) {  // every 5 sec at 20 TPS
+            Log::Trace("Avg tick: {:.2f}ms", total_ms / tick_count);
+            total_ms = 0;
+            tick_count = 0;
+        }
+
+        if (ms > 40.0) {
+            Log::Warn("Slow tick: {:.2f}ms", ms);
+        }
+        if (elapsed < TICK_RATE) {
             std::this_thread::sleep_for(TICK_RATE - elapsed);
         }
     }
