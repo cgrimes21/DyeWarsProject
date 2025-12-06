@@ -2,12 +2,12 @@
 /// DyeWarsServer
 /// Created by Anonymous on Dec 05, 2025
 /// =======================================
-#include "ClientConnection.h"
-#include "network/packets/outgoing/PacketSender.h"
-#include "core/Log.h"
 #include "GameServer.h"
+#include "ClientConnection.h"
+#include "core/Log.h"
 #include "lua/LuaEngine.h"
 #include "network/BandwidthMonitor.h"
+#include "network/packets/outgoing/PacketSender.h"
 
 
 GameServer::GameServer(asio::io_context& io_context)
@@ -16,8 +16,8 @@ GameServer::GameServer(asio::io_context& io_context)
                 asio::ip::tcp::endpoint(
                     asio::ip::address::from_string(Protocol::ADDRESS),
                     Protocol::PORT)),
-      lua_engine_(std::make_shared<LuaGameEngine>()),
-      world_(10, 10)
+      world_(10, 10),
+      lua_engine_(std::make_shared<LuaGameEngine>())
 {
     Log::Info("Server starting on port {}...", Protocol::PORT);
     StartAccept();
@@ -131,8 +131,8 @@ void GameServer::StartAccept()
 
 void GameServer::GameLogicThread()
 {
-    const int TICKS_PER_SECOND = 20;
-    const std::chrono::milliseconds TICK_RATE(1000 / TICKS_PER_SECOND); // 50ms
+    constexpr int TICKS_PER_SECOND = 20;
+    constexpr std::chrono::milliseconds TICK_RATE(1000 / TICKS_PER_SECOND); // 50ms
 
     Log::Info("Game loop started ({} ticks/sec)", TICKS_PER_SECOND);
 
@@ -176,7 +176,7 @@ void GameServer::ProcessTick()
         uint8_t facing = player->GetFacing();
 
         /* I want to send a batch update here similar to the commented out code below
-         * thing is, anything about the player could of changed. do I send one large batch or
+         * thing is, anything about the player could have changed. do I send one large batch or
          * movement batch
          * status batch
          * appearance batch
@@ -244,7 +244,7 @@ void GameServer::ProcessTick()
      */
 }
 
-void GameServer::OnClientLogin(std::shared_ptr<ClientConnection> client)
+void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client)
 {
     // Register with client manager
     clients_.AddClient(client);

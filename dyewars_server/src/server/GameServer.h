@@ -16,7 +16,7 @@ public:
     void Shutdown();
 
     // Logic
-    void OnClientLogin(std::shared_ptr<ClientConnection> client);
+    void OnClientLogin(const std::shared_ptr<ClientConnection> &client);
 
     //Accessors
     ClientManager& Clients() { return clients_;}

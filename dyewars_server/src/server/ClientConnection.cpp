@@ -264,7 +264,8 @@ void ClientConnection::CompleteHandshake() {
     handshake_timer_.cancel();
     handshake_complete_ = true;
 
-    server_->OnClientLogin(shared_from_this());
+    auto self(shared_from_this());
+    server_->OnClientLogin(self);
 }
 
 void ClientConnection::FailHandshake(const std::string& reason) {
