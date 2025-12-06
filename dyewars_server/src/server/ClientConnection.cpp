@@ -6,32 +6,32 @@
 #include <core/Log.h>
 #include <fstream>
 #include <iomanip>
+
 using namespace Protocol::Opcode;
 
 ClientConnection::ClientConnection(asio::ip::tcp::socket socket,
-                                   GameServer* server,
+                                   GameServer *server,
                                    uint64_t client_id)
         : socket_(std::move(socket)),
-        server_(server),
-        client_id_(client_id),
-        handshake_timer_(socket_.get_executor())
-        {
-            try{
-                client_ip_ = socket_.remote_endpoint().address().to_string();
-                // TODO DNS lookup is slow, move to worker thread
-                client_hostname_ = client_ip_;
-            } catch (...) {
-                client_ip_ = "unknown";
-                client_hostname_ = "unknown";
-            }
-        }
+          server_(server),
+          client_id_(client_id),
+          handshake_timer_(socket_.get_executor()) {
+    try {
+        client_ip_ = socket_.remote_endpoint().address().to_string();
+        // TODO DNS lookup is slow, move to worker thread
+        client_hostname_ = client_ip_;
+    } catch (...) {
+        client_ip_ = "unknown";
+        client_hostname_ = "unknown";
+    }
+}
 
-ClientConnection::~ClientConnection(){
+ClientConnection::~ClientConnection() {
     CloseSocket();
 }
 
 void ClientConnection::Start() {
-    Log::Info("IP: {} Hostname: {} starting client connection.",client_ip_, client_hostname_);
+    Log::Info("IP: {} Hostname: {} starting client connection.", client_ip_, client_hostname_);
 
     //5 seconds to respond
     StartHandshakeTimeout();
@@ -40,7 +40,7 @@ void ClientConnection::Start() {
     ReadPacketHeader();
 }
 
-void ClientConnection::Disconnect(const std::string& reason) {
+void ClientConnection::Disconnect(const std::string &reason) {
     // Prevent double-disconnect from concurrent calls
     bool expected = false;
     if (!disconnecting_.compare_exchange_strong(expected, true)) {
@@ -72,13 +72,13 @@ void ClientConnection::Disconnect(const std::string& reason) {
     // These functions are silent no-ops but mutex or Log could throw still
     // Highly unlikely but it would throw off the state of the server
     try { server_->Players().RemoveByClientID(id); }
-    catch (const std::exception& e) { Log::Error("Failed to remove player {}: {}", id, e.what()); }
+    catch (const std::exception &e) { Log::Error("Failed to remove player {}: {}", id, e.what()); }
 
     try { server_->Clients().RemoveClient(id); }
-    catch (const std::exception& e) { Log::Error("Failed to remove client {}: {}", id, e.what()); }
+    catch (const std::exception &e) { Log::Error("Failed to remove client {}: {}", id, e.what()); }
 
     try { server_->Limiter().RemoveConnection(ip); }
-    catch (const std::exception& e) { Log::Error("Failed to remove limiter {}: {}", ip, e.what()); }
+    catch (const std::exception &e) { Log::Error("Failed to remove limiter {}: {}", ip, e.what()); }
 
     Log::Info("Client {} IP: {} disconnected.", id, ip);
 }
@@ -95,7 +95,7 @@ void ClientConnection::CloseSocket() {
 // PACKETS
 // =====================
 /// Send
-void ClientConnection::SendPacket(const Protocol::Packet& pkt) {
+void ClientConnection::SendPacket(const Protocol::Packet &pkt) {
     auto self(shared_from_this());
     auto data = std::make_shared<std::vector<uint8_t>>(pkt.ToBytes());
 
@@ -103,11 +103,11 @@ void ClientConnection::SendPacket(const Protocol::Packet& pkt) {
     BandwidthMonitor::Instance().RecordOutgoing(data->size());
 
     asio::async_write(socket_, asio::buffer(*data),
-        [this, self, data](std::error_code ec, std::size_t) {
-            if (ec && ec != asio::error::operation_aborted) {
-                Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
-            }
-    });
+                      [this, self, data](std::error_code ec, std::size_t) {
+                          if (ec && ec != asio::error::operation_aborted) {
+                              Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
+                          }
+                      });
 }
 
 void ClientConnection::RawSend(const std::shared_ptr<std::vector<uint8_t>> &data) {
@@ -116,12 +116,12 @@ void ClientConnection::RawSend(const std::shared_ptr<std::vector<uint8_t>> &data
 
     auto self(shared_from_this());
     asio::async_write(socket_, asio::buffer(*data),
-        [this, self, data](std::error_code ec, std::size_t) {
-            // Error handling
-            if (ec && ec != asio::error::operation_aborted) {
-                Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
-            }
-        });
+                      [this, self, data](std::error_code ec, std::size_t) {
+                          // Error handling
+                          if (ec && ec != asio::error::operation_aborted) {
+                              Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
+                          }
+                      });
 }
 
 /// Receive
@@ -192,7 +192,7 @@ void ClientConnection::ReadPacketPayload(uint16_t size) {
                      });
 }
 
-void ClientConnection::HandlePacket(const std::vector<uint8_t>& data) {
+void ClientConnection::HandlePacket(const std::vector<uint8_t> &data) {
     if (data.empty()) return;
     // Forward to PacketHandler - we don't process game logic here
     PacketHandler::Handle(shared_from_this(), data, server_);
@@ -207,12 +207,12 @@ void ClientConnection::StartHandshakeTimeout() {
 
     handshake_timer_.expires_after(std::chrono::seconds(Protocol::HANDSHAKE_TIMEOUT_SECONDS));
     handshake_timer_.async_wait(
-            [this, self](const std::error_code& ec) {
+            [this, self](const std::error_code &ec) {
                 OnHandshakeTimeout(ec);
             });
 }
 
-void ClientConnection::OnHandshakeTimeout(const std::error_code& ec) {
+void ClientConnection::OnHandshakeTimeout(const std::error_code &ec) {
     // If timer was cancelled (handshake succeeded), do nothing
     if (ec == asio::error::operation_aborted) {
         return;
@@ -224,13 +224,13 @@ void ClientConnection::OnHandshakeTimeout(const std::error_code& ec) {
     }
 }
 
-void ClientConnection::HandleHandshakePacket(const std::vector<uint8_t>& data) {
+void ClientConnection::HandleHandshakePacket(const std::vector<uint8_t> &data) {
     /// \note
     /// Expected format:\n
     /// Byte 0: Opcode (0x00)\n
     /// Bytes 1-2: Protocol version (0x00 0x01)\n
     /// Bytes 3-6: Client magic ("DYEW" = 0x44 0x59 0x45 0x57)\n
-    const auto& op = Protocol::Opcode::Client::Connection::C_Handshake_Request;
+    const auto &op = Protocol::Opcode::Client::Connection::C_Handshake_Request;
 
     if (data.size() != op.payloadSize) {
         return FailHandshake(std::format("invalid packet size (got {}, expected {})",
@@ -264,20 +264,22 @@ void ClientConnection::CompleteHandshake() {
     handshake_timer_.cancel();
     handshake_complete_ = true;
 
+
     auto self(shared_from_this());
     server_->OnClientLogin(self);
 }
 
-void ClientConnection::FailHandshake(const std::string& reason) {
+void ClientConnection::FailHandshake(const std::string &reason) {
     Log::Warn("IP: {} Hostname: {} handshake failed because: {}.", client_ip_, client_hostname_, reason);
     server_->Limiter().RecordFailure(client_ip_);
     LogFailedConnection(reason);
     Disconnect(reason);
 }
+
 /// =============================\n
 /// LOGGING\n
 /// =============================\n
-void ClientConnection::LogFailedConnection(const std::string& reason) {
+void ClientConnection::LogFailedConnection(const std::string &reason) {
     std::ofstream logfile("failed_connections.log", std::ios::app);
     if (logfile.is_open()) {
         // Get current time
@@ -292,9 +294,8 @@ void ClientConnection::LogFailedConnection(const std::string& reason) {
     }
 }
 
-void ClientConnection::LogPacketReceived(const std::vector<uint8_t>& payload, uint16_t size)
-{
-    std::cout<<"Packet Received: 11 68 ";
+void ClientConnection::LogPacketReceived(const std::vector<uint8_t> &payload, uint16_t size) {
+    std::cout << "Packet Received: 11 68 ";
 
     // Print size as two hex bytes (big-endian)
     std::cout << std::hex << std::uppercase << std::setfill('0');

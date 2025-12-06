@@ -37,19 +37,18 @@
 
 struct OpCodeInfo {
     uint8_t op;
-    const char* desc;
-    const char* name;
+    const char *desc;
+    const char *name;
     bool implemented = false;
     uint8_t payloadSize = -1;   //-1 varying
 };
 
-namespace Protocol::Opcode
-{
-    enum class ServerOpcode: uint8_t {
+namespace Protocol::Opcode {
+    enum class ServerOpcode : uint8_t {
         Handshake_Accepted = 0xF0,
 
     };
-    namespace Server{
+    namespace Server {
         // ========================================================================
         // CONNECTION & HANDSHAKE - 0xF0 - 0xFF
         // ========================================================================
@@ -94,12 +93,11 @@ namespace Protocol::Opcode
 
 
     }
-    namespace Client{
+    namespace Client {
         // ========================================================================
         // CONNECTION & HANDSHAKE
         // ========================================================================
-        namespace Connection
-        {
+        namespace Connection {
 
             /// Initial connection handshake from client.\n
             /// Payload: [version:2][clientMagic:4]
@@ -132,8 +130,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // CLIENT MOVEMENT & ACTIONS
     // ========================================================================
-    namespace Movement
-    {
+    namespace Movement {
         // Player requests to move.
         // Payload: [direction:1][facing:1]
         constexpr uint8_t C_Move_Request = 0x01;
@@ -154,8 +151,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // LOCAL PLAYER (Server -> Client)
     // ========================================================================
-    namespace LocalPlayer
-    {
+    namespace LocalPlayer {
         // Welcome packet with player ID and initial state.
         // Payload: [playerId:4][x:2][y:2][facing:1]
         constexpr uint8_t S_Welcome = 0x10;
@@ -200,8 +196,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // MAP DATA (Server -> Client)
     // ========================================================================
-    namespace Map
-    {
+    namespace Map {
         // Full tile data for visible region + buffer.
         // Payload: [mapId:2][originX:2][originY:2][width:1][height:1][tileData:width*height*2]
         // Each tile: [tileId:2]
@@ -227,8 +222,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // REMOTE PLAYERS (Server -> Client)
     // ========================================================================
-    namespace RemotePlayer
-    {
+    namespace RemotePlayer {
         // Player entered visible range.
         // Payload: [playerId:4][x:2][y:2][facing:1][appearanceData:variable]
         constexpr uint8_t S_Entered_Range = 0x20;
@@ -261,8 +255,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // ENTITIES - NPCs/Monsters (Server -> Client)
     // ========================================================================
-    namespace Entity
-    {
+    namespace Entity {
         // Entity entered visible range.
         // Payload: [entityId:4][entityType:1][x:2][y:2][facing:1][appearanceId:2]
         constexpr uint8_t S_Entered_Range = 0x28;
@@ -295,8 +288,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // BATCH UPDATES (Server -> Client)
     // ========================================================================
-    namespace Batch
-    {
+    namespace Batch {
         // Batch remote player positions.
         // Payload: [count:1][[playerId:4][x:2][y:2][facing:1]]...
         constexpr uint8_t S_RemotePlayer_Update = 0x27;
@@ -309,8 +301,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // COMBAT & EFFECTS
     // ========================================================================
-    namespace Combat
-    {
+    namespace Combat {
         // --- Server -> Client ---
 
         // Play visual effect at location.
@@ -367,8 +358,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // CHAT & SOCIAL
     // ========================================================================
-    namespace Chat
-    {
+    namespace Chat {
         // --- Client -> Server ---
 
         // Send chat message.
@@ -409,8 +399,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // INVENTORY & ITEMS
     // ========================================================================
-    namespace Inventory
-    {
+    namespace Inventory {
         // --- Client -> Server ---
 
         // Use item.
@@ -451,8 +440,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // DEBUG & ADMIN
     // ========================================================================
-    namespace Debug
-    {
+    namespace Debug {
         // Custom debug response.
         // Payload: [dataLength:2][data:variable]
         constexpr uint8_t S_Custom_Response = 0xE0;
@@ -469,8 +457,7 @@ namespace Protocol::Opcode
     // ========================================================================
     // SYSTEM NOTIFICATIONS
     // ========================================================================
-    namespace System
-    {
+    namespace System {
         // Kick notification.
         // Payload: [reasonLength:1][reason:variable]
         constexpr uint8_t S_Kick_Notification = 0xF2;
@@ -489,8 +476,7 @@ namespace Protocol::Opcode
 // ============================================================================
 // PAYLOAD SIZES (names match opcodes exactly)
 // ============================================================================
-namespace Protocol::PayloadSize
-{
+namespace Protocol::PayloadSize {
     // Connection
     constexpr size_t C_Connection_Handshake_Request = 7;        // opcode + version(2) + magic(4)
     constexpr size_t S_Connection_Handshake_Accepted = 7;       // opcode + version(2) + magic(4)
@@ -588,121 +574,195 @@ namespace Protocol::PayloadSize
 // ============================================================================
 // OPCODE UTILITIES
 // ============================================================================
-namespace Protocol::OpcodeUtil
-{
-    inline std::string GetName(uint8_t opcode)
-    {
-        switch (opcode)
-        {
+namespace Protocol::OpcodeUtil {
+    inline std::string GetName(uint8_t opcode) {
+        switch (opcode) {
             // Connection
-            case Opcode::Server::Connection::S_Handshake_Rejected:      return "Connection::S_Handshake_Rejected";
-            case Opcode::Client::Connection::C_Disconnect_Request:      return "Connection::C_Disconnect_Request";
-            case Opcode::Server::Connection::S_Disconnect_Acknowledged: return "Connection::S_Disconnect_Acknowledged";
-            case Opcode::Client::Connection::C_Ping_Request:            return "Connection::C_Ping_Request";
-            case Opcode::Server::Connection::S_Pong_Response:           return "Connection::S_Pong_Response";
-            case Opcode::Server::Connection::S_Ping_Request:            return "Connection::S_Ping_Request";
-            case Opcode::Client::Connection::C_Pong_Response:           return "Connection::C_Pong_Response";
-            case Opcode::Client::Connection::C_Heartbeat_Request:       return "Connection::C_Heartbeat_Request";
-            case Opcode::Server::Connection::S_Heartbeat_Response:      return "Connection::S_Heartbeat_Response";
+            case Opcode::Server::Connection::S_Handshake_Rejected:
+                return "Connection::S_Handshake_Rejected";
+            case Opcode::Client::Connection::C_Disconnect_Request:
+                return "Connection::C_Disconnect_Request";
+            case Opcode::Server::Connection::S_Disconnect_Acknowledged:
+                return "Connection::S_Disconnect_Acknowledged";
+            case Opcode::Client::Connection::C_Ping_Request:
+                return "Connection::C_Ping_Request";
+            case Opcode::Server::Connection::S_Pong_Response:
+                return "Connection::S_Pong_Response";
+            case Opcode::Server::Connection::S_Ping_Request:
+                return "Connection::S_Ping_Request";
+            case Opcode::Client::Connection::C_Pong_Response:
+                return "Connection::C_Pong_Response";
+            case Opcode::Client::Connection::C_Heartbeat_Request:
+                return "Connection::C_Heartbeat_Request";
+            case Opcode::Server::Connection::S_Heartbeat_Response:
+                return "Connection::S_Heartbeat_Response";
 
                 // Movement
-            case Opcode::Movement::C_Move_Request:              return "Movement::C_Move_Request";
-            case Opcode::Movement::C_Turn_Request:              return "Movement::C_Turn_Request";
-            case Opcode::Movement::C_Warp_Request:              return "Movement::C_Warp_Request";
-            case Opcode::Movement::C_Interact_Request:          return "Movement::C_Interact_Request";
+            case Opcode::Movement::C_Move_Request:
+                return "Movement::C_Move_Request";
+            case Opcode::Movement::C_Turn_Request:
+                return "Movement::C_Turn_Request";
+            case Opcode::Movement::C_Warp_Request:
+                return "Movement::C_Warp_Request";
+            case Opcode::Movement::C_Interact_Request:
+                return "Movement::C_Interact_Request";
 
                 // LocalPlayer
-            case Opcode::LocalPlayer::S_Welcome:                return "LocalPlayer::S_Welcome";
-            case Opcode::LocalPlayer::S_Position_Correction:    return "LocalPlayer::S_Position_Correction";
-            case Opcode::LocalPlayer::S_Facing_Correction:      return "LocalPlayer::S_Facing_Correction";
-            case Opcode::LocalPlayer::S_Stats_Update:           return "LocalPlayer::S_Stats_Update";
-            case Opcode::LocalPlayer::S_Exp_Gained:             return "LocalPlayer::S_Exp_Gained";
-            case Opcode::LocalPlayer::S_Level_Up:               return "LocalPlayer::S_Level_Up";
-            case Opcode::LocalPlayer::S_Died:                   return "LocalPlayer::S_Died";
-            case Opcode::LocalPlayer::S_Respawned:              return "LocalPlayer::S_Respawned";
-            case Opcode::LocalPlayer::S_Appearance_Changed:     return "LocalPlayer::S_Appearance_Changed";
-            case Opcode::LocalPlayer::S_Warped:                 return "LocalPlayer::S_Warped";
+            case Opcode::LocalPlayer::S_Welcome:
+                return "LocalPlayer::S_Welcome";
+            case Opcode::LocalPlayer::S_Position_Correction:
+                return "LocalPlayer::S_Position_Correction";
+            case Opcode::LocalPlayer::S_Facing_Correction:
+                return "LocalPlayer::S_Facing_Correction";
+            case Opcode::LocalPlayer::S_Stats_Update:
+                return "LocalPlayer::S_Stats_Update";
+            case Opcode::LocalPlayer::S_Exp_Gained:
+                return "LocalPlayer::S_Exp_Gained";
+            case Opcode::LocalPlayer::S_Level_Up:
+                return "LocalPlayer::S_Level_Up";
+            case Opcode::LocalPlayer::S_Died:
+                return "LocalPlayer::S_Died";
+            case Opcode::LocalPlayer::S_Respawned:
+                return "LocalPlayer::S_Respawned";
+            case Opcode::LocalPlayer::S_Appearance_Changed:
+                return "LocalPlayer::S_Appearance_Changed";
+            case Opcode::LocalPlayer::S_Warped:
+                return "LocalPlayer::S_Warped";
 
                 // Map
-            case Opcode::Map::S_Tile_Data:                      return "Map::S_Tile_Data";
-            case Opcode::Map::S_Tile_Update:                    return "Map::S_Tile_Update";
-            case Opcode::Map::S_Map_Info:                       return "Map::S_Map_Info";
-            case Opcode::Map::S_Object_Data:                    return "Map::S_Object_Data";
-            case Opcode::Map::S_Collision_Data:                 return "Map::S_Collision_Data";
+            case Opcode::Map::S_Tile_Data:
+                return "Map::S_Tile_Data";
+            case Opcode::Map::S_Tile_Update:
+                return "Map::S_Tile_Update";
+            case Opcode::Map::S_Map_Info:
+                return "Map::S_Map_Info";
+            case Opcode::Map::S_Object_Data:
+                return "Map::S_Object_Data";
+            case Opcode::Map::S_Collision_Data:
+                return "Map::S_Collision_Data";
 
                 // RemotePlayer
-            case Opcode::RemotePlayer::S_Entered_Range:         return "RemotePlayer::S_Entered_Range";
-            case Opcode::RemotePlayer::S_Left_Range:            return "RemotePlayer::S_Left_Range";
-            case Opcode::RemotePlayer::S_Appearance_Changed:    return "RemotePlayer::S_Appearance_Changed";
-            case Opcode::RemotePlayer::S_Died:                  return "RemotePlayer::S_Died";
-            case Opcode::RemotePlayer::S_Respawned:             return "RemotePlayer::S_Respawned";
-            case Opcode::RemotePlayer::S_Joined_Game:           return "RemotePlayer::S_Joined_Game";
-            case Opcode::RemotePlayer::S_Left_Game:             return "RemotePlayer::S_Left_Game";
+            case Opcode::RemotePlayer::S_Entered_Range:
+                return "RemotePlayer::S_Entered_Range";
+            case Opcode::RemotePlayer::S_Left_Range:
+                return "RemotePlayer::S_Left_Range";
+            case Opcode::RemotePlayer::S_Appearance_Changed:
+                return "RemotePlayer::S_Appearance_Changed";
+            case Opcode::RemotePlayer::S_Died:
+                return "RemotePlayer::S_Died";
+            case Opcode::RemotePlayer::S_Respawned:
+                return "RemotePlayer::S_Respawned";
+            case Opcode::RemotePlayer::S_Joined_Game:
+                return "RemotePlayer::S_Joined_Game";
+            case Opcode::RemotePlayer::S_Left_Game:
+                return "RemotePlayer::S_Left_Game";
 
                 // Entity
-            case Opcode::Entity::S_Entered_Range:               return "Entity::S_Entered_Range";
-            case Opcode::Entity::S_Left_Range:                  return "Entity::S_Left_Range";
-            case Opcode::Entity::S_Position_Update:             return "Entity::S_Position_Update";
-            case Opcode::Entity::S_State_Changed:               return "Entity::S_State_Changed";
-            case Opcode::Entity::S_Target_Changed:              return "Entity::S_Target_Changed";
-            case Opcode::Entity::S_Died:                        return "Entity::S_Died";
-            case Opcode::Entity::S_Respawned:                   return "Entity::S_Respawned";
+            case Opcode::Entity::S_Entered_Range:
+                return "Entity::S_Entered_Range";
+            case Opcode::Entity::S_Left_Range:
+                return "Entity::S_Left_Range";
+            case Opcode::Entity::S_Position_Update:
+                return "Entity::S_Position_Update";
+            case Opcode::Entity::S_State_Changed:
+                return "Entity::S_State_Changed";
+            case Opcode::Entity::S_Target_Changed:
+                return "Entity::S_Target_Changed";
+            case Opcode::Entity::S_Died:
+                return "Entity::S_Died";
+            case Opcode::Entity::S_Respawned:
+                return "Entity::S_Respawned";
 
                 // Batch
-            case Opcode::Batch::S_RemotePlayer_Update:          return "Batch::S_RemotePlayer_Update";
-            case Opcode::Batch::S_Entity_Update:                return "Batch::S_Entity_Update";
+            case Opcode::Batch::S_RemotePlayer_Update:
+                return "Batch::S_RemotePlayer_Update";
+            case Opcode::Batch::S_Entity_Update:
+                return "Batch::S_Entity_Update";
 
                 // Combat
-            case Opcode::Combat::S_Effect_Play:                 return "Combat::S_Effect_Play";
-            case Opcode::Combat::S_Damage:                      return "Combat::S_Damage";
-            case Opcode::Combat::S_Heal:                        return "Combat::S_Heal";
-            case Opcode::Combat::S_Skill_Cast:                  return "Combat::S_Skill_Cast";
-            case Opcode::Combat::S_Buff_Applied:                return "Combat::S_Buff_Applied";
-            case Opcode::Combat::S_Buff_Removed:                return "Combat::S_Buff_Removed";
-            case Opcode::Combat::S_Miss:                        return "Combat::S_Miss";
-            case Opcode::Combat::S_Critical:                    return "Combat::S_Critical";
-            case Opcode::Combat::C_Attack_Request:              return "Combat::C_Attack_Request";
-            case Opcode::Combat::C_Skill_Use_Request:           return "Combat::C_Skill_Use_Request";
-            case Opcode::Combat::C_Target_Request:              return "Combat::C_Target_Request";
-            case Opcode::Combat::C_Target_Clear_Request:        return "Combat::C_Target_Clear_Request";
+            case Opcode::Combat::S_Effect_Play:
+                return "Combat::S_Effect_Play";
+            case Opcode::Combat::S_Damage:
+                return "Combat::S_Damage";
+            case Opcode::Combat::S_Heal:
+                return "Combat::S_Heal";
+            case Opcode::Combat::S_Skill_Cast:
+                return "Combat::S_Skill_Cast";
+            case Opcode::Combat::S_Buff_Applied:
+                return "Combat::S_Buff_Applied";
+            case Opcode::Combat::S_Buff_Removed:
+                return "Combat::S_Buff_Removed";
+            case Opcode::Combat::S_Miss:
+                return "Combat::S_Miss";
+            case Opcode::Combat::S_Critical:
+                return "Combat::S_Critical";
+            case Opcode::Combat::C_Attack_Request:
+                return "Combat::C_Attack_Request";
+            case Opcode::Combat::C_Skill_Use_Request:
+                return "Combat::C_Skill_Use_Request";
+            case Opcode::Combat::C_Target_Request:
+                return "Combat::C_Target_Request";
+            case Opcode::Combat::C_Target_Clear_Request:
+                return "Combat::C_Target_Clear_Request";
 
                 // Chat
-            case Opcode::Chat::C_Message_Send:                  return "Chat::C_Message_Send";
-            case Opcode::Chat::C_Emote_Send:                    return "Chat::C_Emote_Send";
-            case Opcode::Chat::C_Whisper_Send:                  return "Chat::C_Whisper_Send";
-            case Opcode::Chat::S_Message_Broadcast:             return "Chat::S_Message_Broadcast";
-            case Opcode::Chat::S_Emote_Broadcast:               return "Chat::S_Emote_Broadcast";
-            case Opcode::Chat::S_Whisper_Received:              return "Chat::S_Whisper_Received";
-            case Opcode::Chat::S_Whisper_Sent_Confirm:          return "Chat::S_Whisper_Sent_Confirm";
-            case Opcode::Chat::S_System_Message:                return "Chat::S_System_Message";
+            case Opcode::Chat::C_Message_Send:
+                return "Chat::C_Message_Send";
+            case Opcode::Chat::C_Emote_Send:
+                return "Chat::C_Emote_Send";
+            case Opcode::Chat::C_Whisper_Send:
+                return "Chat::C_Whisper_Send";
+            case Opcode::Chat::S_Message_Broadcast:
+                return "Chat::S_Message_Broadcast";
+            case Opcode::Chat::S_Emote_Broadcast:
+                return "Chat::S_Emote_Broadcast";
+            case Opcode::Chat::S_Whisper_Received:
+                return "Chat::S_Whisper_Received";
+            case Opcode::Chat::S_Whisper_Sent_Confirm:
+                return "Chat::S_Whisper_Sent_Confirm";
+            case Opcode::Chat::S_System_Message:
+                return "Chat::S_System_Message";
 
                 // Inventory
-            case Opcode::Inventory::C_Item_Use_Request:         return "Inventory::C_Item_Use_Request";
-            case Opcode::Inventory::C_Item_Drop_Request:        return "Inventory::C_Item_Drop_Request";
-            case Opcode::Inventory::C_Item_Pickup_Request:      return "Inventory::C_Item_Pickup_Request";
-            case Opcode::Inventory::C_Item_Move_Request:        return "Inventory::C_Item_Move_Request";
-            case Opcode::Inventory::S_Full_Update:              return "Inventory::S_Full_Update";
-            case Opcode::Inventory::S_Slot_Update:              return "Inventory::S_Slot_Update";
-            case Opcode::Inventory::S_GroundItem_Spawned:       return "Inventory::S_GroundItem_Spawned";
-            case Opcode::Inventory::S_GroundItem_Removed:       return "Inventory::S_GroundItem_Removed";
+            case Opcode::Inventory::C_Item_Use_Request:
+                return "Inventory::C_Item_Use_Request";
+            case Opcode::Inventory::C_Item_Drop_Request:
+                return "Inventory::C_Item_Drop_Request";
+            case Opcode::Inventory::C_Item_Pickup_Request:
+                return "Inventory::C_Item_Pickup_Request";
+            case Opcode::Inventory::C_Item_Move_Request:
+                return "Inventory::C_Item_Move_Request";
+            case Opcode::Inventory::S_Full_Update:
+                return "Inventory::S_Full_Update";
+            case Opcode::Inventory::S_Slot_Update:
+                return "Inventory::S_Slot_Update";
+            case Opcode::Inventory::S_GroundItem_Spawned:
+                return "Inventory::S_GroundItem_Spawned";
+            case Opcode::Inventory::S_GroundItem_Removed:
+                return "Inventory::S_GroundItem_Removed";
 
                 // Debug
-            case Opcode::Debug::S_Custom_Response:              return "Debug::S_Custom_Response";
-            case Opcode::Debug::C_Request_State:                return "Debug::C_Request_State";
-            case Opcode::Debug::S_State_Response:               return "Debug::S_State_Response";
+            case Opcode::Debug::S_Custom_Response:
+                return "Debug::S_Custom_Response";
+            case Opcode::Debug::C_Request_State:
+                return "Debug::C_Request_State";
+            case Opcode::Debug::S_State_Response:
+                return "Debug::S_State_Response";
 
                 // System
-            case Opcode::System::S_Kick_Notification:           return "System::S_Kick_Notification";
-            case Opcode::System::S_Shutdown_Warning:            return "System::S_Shutdown_Warning";
-            case Opcode::System::S_Time_Sync:                   return "System::S_Time_Sync";
+            case Opcode::System::S_Kick_Notification:
+                return "System::S_Kick_Notification";
+            case Opcode::System::S_Shutdown_Warning:
+                return "System::S_Shutdown_Warning";
+            case Opcode::System::S_Time_Sync:
+                return "System::S_Time_Sync";
 
             default:
                 return "Unknown(0x" + std::to_string(opcode) + ")";
         }
     }
 
-    inline bool IsClientToServer(uint8_t opcode)
-    {
+    inline bool IsClientToServer(uint8_t opcode) {
         return (opcode >= 0x00 && opcode <= 0x0F) ||
                (opcode >= 0x40 && opcode <= 0x4F) ||
                (opcode >= 0x50 && opcode <= 0x57) ||
@@ -716,13 +776,11 @@ namespace Protocol::OpcodeUtil
                opcode == Opcode::Debug::C_Request_State;
     }
 
-    inline bool IsServerToClient(uint8_t opcode)
-    {
+    inline bool IsServerToClient(uint8_t opcode) {
         return !IsClientToServer(opcode);
     }
 
-    inline std::string GetCategory(uint8_t opcode)
-    {
+    inline std::string GetCategory(uint8_t opcode) {
         if (opcode == 0x00) return "Connection";
         if (opcode >= 0x01 && opcode <= 0x0F) return "Movement";
         if (opcode >= 0x10 && opcode <= 0x19) return "LocalPlayer";

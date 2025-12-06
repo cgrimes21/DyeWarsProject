@@ -3,6 +3,7 @@
 /// =======================================
 //
 #pragma once
+
 #include <memory>
 #include "TileMap.h"
 
@@ -11,7 +12,8 @@ public:
     World(int width, int height);
 
     TileMap &GetMap() { return *tilemap_; }
-    const TileMap &GetMap() const {return *tilemap_;}
+
+    const TileMap &GetMap() const { return *tilemap_; }
 
 private:
     std::unique_ptr<TileMap> tilemap_;

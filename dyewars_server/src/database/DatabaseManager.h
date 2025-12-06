@@ -8,6 +8,7 @@
 // On Linux: sudo apt-get install libsqlite3-dev
 
 #pragma once
+
 #include <string>
 #include <optional>
 #include <sqlite3.h>
@@ -23,7 +24,7 @@ struct PlayerAccount {
 
 class DatabaseManager {
 public:
-    DatabaseManager(const std::string& db_path = "game_server.db") {
+    DatabaseManager(const std::string &db_path = "game_server.db") {
         int rc = sqlite3_open(db_path.c_str(), &db_);
 
         if (rc != SQLITE_OK) {
@@ -43,7 +44,7 @@ public:
     }
 
     // Login/register - returns user_id
-    std::optional<PlayerAccount> LoginOrRegister(const std::string& username) {
+    std::optional<PlayerAccount> LoginOrRegister(const std::string &username) {
         if (!db_) return std::nullopt;
 
         // Try to find existing player
@@ -58,11 +59,11 @@ public:
     }
 
     // Get player by username
-    std::optional<PlayerAccount> GetPlayerByUsername(const std::string& username) {
+    std::optional<PlayerAccount> GetPlayerByUsername(const std::string &username) {
         if (!db_) return std::nullopt;
 
-        const char* sql = "SELECT user_id, username, level, experience FROM players WHERE username = ?;";
-        sqlite3_stmt* stmt;
+        const char *sql = "SELECT user_id, username, level, experience FROM players WHERE username = ?;";
+        sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
             std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
@@ -77,7 +78,7 @@ public:
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             PlayerAccount account;
             account.user_id = sqlite3_column_int(stmt, 0);
-            account.username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            account.username = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
             account.level = sqlite3_column_int(stmt, 2);
             account.experience = sqlite3_column_int(stmt, 3);
             result = account;
@@ -91,8 +92,8 @@ public:
     std::optional<PlayerAccount> GetPlayerByID(uint32_t user_id) {
         if (!db_) return std::nullopt;
 
-        const char* sql = "SELECT user_id, username, level, experience FROM players WHERE user_id = ?;";
-        sqlite3_stmt* stmt;
+        const char *sql = "SELECT user_id, username, level, experience FROM players WHERE user_id = ?;";
+        sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
             std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
@@ -106,7 +107,7 @@ public:
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             PlayerAccount account;
             account.user_id = sqlite3_column_int(stmt, 0);
-            account.username = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            account.username = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
             account.level = sqlite3_column_int(stmt, 2);
             account.experience = sqlite3_column_int(stmt, 3);
             result = account;
@@ -120,8 +121,8 @@ public:
     bool UpdatePlayerStats(uint32_t user_id, int level, int experience) {
         if (!db_) return false;
 
-        const char* sql = "UPDATE players SET level = ?, experience = ? WHERE user_id = ?;";
-        sqlite3_stmt* stmt;
+        const char *sql = "UPDATE players SET level = ?, experience = ? WHERE user_id = ?;";
+        sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
             std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
@@ -146,8 +147,8 @@ public:
     bool SavePlayerPosition(uint32_t user_id, int x, int y) {
         if (!db_) return false;
 
-        const char* sql = "UPDATE players SET last_x = ?, last_y = ? WHERE user_id = ?;";
-        sqlite3_stmt* stmt;
+        const char *sql = "UPDATE players SET last_x = ?, last_y = ? WHERE user_id = ?;";
+        sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
             std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
@@ -166,7 +167,7 @@ public:
 
 private:
     void CreateTables() {
-        const char* sql = R"(
+        const char *sql = R"(
             CREATE TABLE IF NOT EXISTS players (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
@@ -181,7 +182,7 @@ private:
             CREATE INDEX IF NOT EXISTS idx_username ON players(username);
         )";
 
-        char* err_msg = nullptr;
+        char *err_msg = nullptr;
         if (sqlite3_exec(db_, sql, nullptr, nullptr, &err_msg) != SQLITE_OK) {
             std::cerr << "SQL error: " << err_msg << std::endl;
             sqlite3_free(err_msg);
@@ -190,9 +191,9 @@ private:
         }
     }
 
-    std::optional<PlayerAccount> CreateNewPlayer(const std::string& username) {
-        const char* sql = "INSERT INTO players (username) VALUES (?);";
-        sqlite3_stmt* stmt;
+    std::optional<PlayerAccount> CreateNewPlayer(const std::string &username) {
+        const char *sql = "INSERT INTO players (username) VALUES (?);";
+        sqlite3_stmt *stmt;
 
         if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
             std::cerr << "Failed to prepare statement: " << sqlite3_errmsg(db_) << std::endl;
@@ -222,7 +223,7 @@ private:
         return account;
     }
 
-    sqlite3* db_;
+    sqlite3 *db_;
 };
 
 // Example usage in your server:

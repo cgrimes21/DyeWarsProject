@@ -7,6 +7,7 @@
 #include "core/Log.h"
 #include <mutex>
 #include <cassert>
+
 using namespace std;
 
 shared_ptr<Player> PlayerRegistry::CreatePlayer(uint64_t client_id) {
@@ -29,10 +30,8 @@ void PlayerRegistry::RemovePlayer(uint64_t player_id) {
 
     {// Find and remove client mapping
         lock_guard<mutex> lock(mutex_);
-        for (auto it = client_to_player_.begin(); it != client_to_player_.end(); it++)
-        {
-            if(it->second == player_id)
-            {
+        for (auto it = client_to_player_.begin(); it != client_to_player_.end(); it++) {
+            if (it->second == player_id) {
                 client_to_player_.erase(it);
                 break;
             }
@@ -55,9 +54,7 @@ void PlayerRegistry::RemoveByClientID(uint64_t client_id) {
 }
 
 
-
-void PlayerRegistry::QueueAction(const Actions::Action &action, uint64_t client_id)
-{
+void PlayerRegistry::QueueAction(const Actions::Action &action, uint64_t client_id) {
     lock_guard<mutex> lock(mutex_);
     auto it = client_to_player_.find(client_id);
 
@@ -92,8 +89,7 @@ std::vector<std::shared_ptr<Player>> PlayerRegistry::ProcessCommands(
             return cmd.Execute(ctx);
         }, action);
 
-        if(result)
-        {
+        if (result) {
             updated_players.push_back(result);
         }
 
@@ -131,7 +127,7 @@ vector<shared_ptr<Player>> PlayerRegistry::GetAllPlayers() {
     lock_guard<mutex> lock(mutex_);
     vector<shared_ptr<Player>> result;
     result.reserve(players_.size());
-    for(const auto &[id,player] : players_)
+    for (const auto &[id, player]: players_)
         result.push_back(player);
     return result;
 }
@@ -139,8 +135,8 @@ vector<shared_ptr<Player>> PlayerRegistry::GetAllPlayers() {
 vector<shared_ptr<Player>> PlayerRegistry::GetDirtyPlayers() {
     lock_guard<mutex> lock(mutex_);
     vector<shared_ptr<Player>> result;
-    for(const auto &[id, player] : players_){
-        if(player->IsDirty()){
+    for (const auto &[id, player]: players_) {
+        if (player->IsDirty()) {
             result.push_back(player);
             player->SetDirty(false);
         }

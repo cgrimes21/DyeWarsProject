@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -48,34 +49,35 @@ namespace Protocol {
         }
     };
 
-    namespace PacketWriter{
-        inline void WriteByte(std::vector<uint8_t>& buffer, uint8_t value)
-        {buffer.push_back(value);}
+    namespace PacketWriter {
+        inline void WriteByte(std::vector<uint8_t> &buffer, uint8_t value) { buffer.push_back(value); }
 
-        inline void WriteShort(std::vector<uint8_t> & buffer, uint16_t value) {
+        inline void WriteShort(std::vector<uint8_t> &buffer, uint16_t value) {
             buffer.push_back((value >> 8) & 0xFF);
             buffer.push_back(value & 0xFF);
         }
-        inline void WriteUInt(std::vector<uint8_t>& buffer, uint32_t value) {
+
+        inline void WriteUInt(std::vector<uint8_t> &buffer, uint32_t value) {
             buffer.push_back((value >> 24) & 0xFF);
             buffer.push_back((value >> 16) & 0xFF);
             buffer.push_back((value >> 8) & 0xFF);
             buffer.push_back(value & 0xFF);
         }
-        inline void WriteInt(std::vector<uint8_t>& buffer, int value) {
+
+        inline void WriteInt(std::vector<uint8_t> &buffer, int value) {
             WriteUInt(buffer, static_cast<uint32_t>(value));
         }
 
     }
-    namespace PacketReader{
-        inline uint8_t ReadByte(const std::vector<uint8_t>& buffer, size_t& offset) {
+    namespace PacketReader {
+        inline uint8_t ReadByte(const std::vector<uint8_t> &buffer, size_t &offset) {
             if (offset + 1 > buffer.size()) {
                 throw std::out_of_range("Buffer too small for ReadByte");
             }
             return buffer[offset++];
         }
 
-        inline uint16_t ReadShort(const std::vector<uint8_t>& buffer, size_t& offset) {
+        inline uint16_t ReadShort(const std::vector<uint8_t> &buffer, size_t &offset) {
             if (offset + 2 > buffer.size()) {
                 throw std::out_of_range("Buffer too small for ReadShort");
             }
@@ -84,7 +86,7 @@ namespace Protocol {
             return value;
         }
 
-        inline uint32_t ReadUInt(const std::vector<uint8_t>& buffer, size_t& offset) {
+        inline uint32_t ReadUInt(const std::vector<uint8_t> &buffer, size_t &offset) {
             if (offset + 4 > buffer.size()) {
                 throw std::out_of_range("Buffer too small for ReadUInt");
             }
@@ -93,7 +95,8 @@ namespace Protocol {
             offset += 4;
             return value;
         }
-        inline int ReadInt(const std::vector<uint8_t>& buffer, size_t& offset) {
+
+        inline int ReadInt(const std::vector<uint8_t> &buffer, size_t &offset) {
             if (offset + 4 > buffer.size()) {
                 throw std::out_of_range("Buffer too small for ReadInt");
             }

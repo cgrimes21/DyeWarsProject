@@ -7,8 +7,7 @@
 #include "game/PlayerRegistry.h"
 
 namespace Actions::Movement {
-
-    std::shared_ptr<Player> MoveCommand::Execute(GameContext& ctx) const {
+    std::shared_ptr<Player> MoveCommand::Execute(GameContext &ctx) const {
         auto player = ctx.players.GetByID(player_id);
         if (!player) return nullptr;
 
@@ -20,7 +19,7 @@ namespace Actions::Movement {
         return nullptr;
     }
 
-    std::shared_ptr<Player> TurnCommand::Execute(GameContext& ctx) const {
+    std::shared_ptr<Player> TurnCommand::Execute(GameContext &ctx) const {
         auto player = ctx.players.GetByID(player_id);
         if (!player) return nullptr;
 

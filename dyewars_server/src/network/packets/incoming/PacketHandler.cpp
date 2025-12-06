@@ -10,14 +10,13 @@
 #include "game/actions/Actions.h"
 #include "core/Log.h"
 
-namespace PacketHandler{
+namespace PacketHandler {
     void Handle(
             std::shared_ptr<ClientConnection> client,
             const vector<uint8_t> &data,
             GameServer *server
-            )
-    {
-        if(data.empty()) return;
+    ) {
+        if (data.empty()) return;
 
         // Validate packet size
         assert(data.size() <= Protocol::MAX_PAYLOAD_SIZE && "Packethandler handle data is over max protocol bytes");
@@ -51,9 +50,9 @@ namespace PacketHandler{
                 }
                 // Queue the action - will be processed in game loop
                 server->Players().QueueAction(Actions::Movement::MoveCommand{
-                    player_id,
-                    direction,
-                    facing
+                        player_id,
+                        direction,
+                        facing
                 }, client_id);
                 break;
             }

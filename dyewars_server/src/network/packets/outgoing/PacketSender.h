@@ -3,6 +3,7 @@
 /// =======================================
 //
 #pragma once
+
 #include <memory>
 #include "network/packets/Protocol.h"
 #include "network/packets/OpCodes.h"
@@ -14,7 +15,7 @@ namespace Packets::PacketSender {
     inline void Welcome(
             const std::shared_ptr<ClientConnection> &client,
             const std::shared_ptr<Player> &player
-            ) {
+    ) {
         Protocol::Packet pkt;
         Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Welcome);
         Protocol::PacketWriter::WriteUInt(pkt.payload, player->GetID());
@@ -24,7 +25,7 @@ namespace Packets::PacketSender {
         // Can add more later: level, name, appearance...
         pkt.size = static_cast<uint16_t>(pkt.payload.size());
         client->SendPacket(pkt);
-        }
+    }
 
 /// Send player position update
 /// Payload: [playerId:4][x:2][y:2][facing:1]

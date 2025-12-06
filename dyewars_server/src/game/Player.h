@@ -3,35 +3,42 @@
 /// Created by Anonymous on Dec 05, 2025
 /// =======================================
 #pragma once
+
 #include <cstdint>
 #include <atomic>
 #include <chrono>
 #include "game/TileMap.h"
 
-class Player
-{
+class Player {
 public:
     Player(uint64_t id, int start_x, int start_y);
 
     bool AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &map);
+
     bool AttemptTurn(uint8_t new_facing);
 
     void SetFacing(uint8_t direction);
+
     void SetPosition(int16_t x, int16_t y);
 
 
     // Getters
     uint64_t GetID() const { return id_; }
+
     int GetX() const { return x_; }
+
     int GetY() const { return y_; }
+
     uint8_t GetFacing() const { return facing_; }
 
     // Dirty flag - marks player as needing broadcast
     bool IsDirty() const { return is_dirty_.load(); }
+
     void SetDirty(bool val) { is_dirty_.store(val); }
 
     // Client link (which network connection owns this player)
     uint64_t GetClientID() const { return client_id_; }
+
     void SetClientID(uint64_t id) { client_id_ = id; }
 
 private:

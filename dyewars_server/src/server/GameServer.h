@@ -1,4 +1,5 @@
 #pragma once
+
 #include "ClientManager.h"
 #include "game/PlayerRegistry.h"
 #include "game/World.h"
@@ -10,20 +11,24 @@
 
 class GameServer {
 public:
-    GameServer(asio::io_context& io_context);
-    ~GameServer();//Destructor
+    GameServer(asio::io_context &io_context);
 
+    ~GameServer();//Destructor
     void Shutdown();
 
     // Logic
     void OnClientLogin(const std::shared_ptr<ClientConnection> &client);
 
     //Accessors
-    ClientManager& Clients() { return clients_;}
-    PlayerRegistry& Players() { return players_; }
-    ConnectionLimiter& Limiter() { return limiter_; }
-    World& GetWorld() { return world_; }
-    asio::io_context& GetIOContext() { return io_context_; }
+    ClientManager &Clients() { return clients_; }
+
+    PlayerRegistry &Players() { return players_; }
+
+    ConnectionLimiter &Limiter() { return limiter_; }
+
+    World &GetWorld() { return world_; }
+
+    asio::io_context &GetIOContext() { return io_context_; }
 
     bool IsRunning() const { return server_running_.load(); }
 
@@ -31,11 +36,13 @@ public:
 
 private:
     void StartAccept();
+
     void GameLogicThread();
+
     void ProcessTick();
-    
+
     // Network
-    asio::io_context& io_context_;
+    asio::io_context &io_context_;
     asio::ip::tcp::acceptor acceptor_;
 
     // State
@@ -47,7 +54,7 @@ private:
     PlayerRegistry players_;
     World world_;
     ConnectionLimiter limiter_;
-    
+
     // Threads
     std::thread game_loop_thread_;
 

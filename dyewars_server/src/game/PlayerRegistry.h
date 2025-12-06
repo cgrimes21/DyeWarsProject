@@ -3,6 +3,7 @@
 /// =======================================
 //
 #pragma once
+
 #include <memory>
 #include <queue>
 #include <variant>
@@ -23,14 +24,20 @@ class PlayerRegistry {
 public:
     // Lifecycle
     void Login(uint64_t client_id);
+
     void Logout();
+
     std::shared_ptr<Player> CreatePlayer(uint64_t client_id);
+
     void RemovePlayer(uint64_t player_id);
+
     void RemoveByClientID(uint64_t client_id);
 
     // Lookups
     std::shared_ptr<Player> GetByID(uint64_t player_id);
+
     std::shared_ptr<Player> GetByClientID(uint64_t client_id);
+
     uint64_t GetPlayerIDForClient(uint64_t client_id);
 
     // Command queue (called from packet handlers on io thread)
@@ -38,12 +45,14 @@ public:
 
     // Process all queued commands (called from game loop)
     std::vector<std::shared_ptr<Player>> ProcessCommands(
-            TileMap& map,
+            TileMap &map,
             ClientManager &manager);
 
     // Queries
     std::vector<std::shared_ptr<Player>> GetAllPlayers();
+
     std::vector<std::shared_ptr<Player>> GetDirtyPlayers();
+
     size_t Count();
 
     // Move timings + network grace
