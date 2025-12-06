@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
-#include <vector>
-#include <string>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 using std::vector;
 

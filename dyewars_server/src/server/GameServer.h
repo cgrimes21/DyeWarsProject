@@ -1,12 +1,12 @@
 #pragma once
+#include "ClientManager.h"
+#include "game/PlayerRegistry.h"
+#include "game/World.h"
+#include "lua/LuaEngine.h"
+#include "network/ConnectionLimiter.h"
 #include <asio.hpp>
 #include <atomic>
 #include <thread>
-#include "ClientManager.h"
-#include "lua/LuaEngine.h"
-#include "network/ConnectionLimiter.h"
-#include "game/PlayerRegistry.h"
-#include "game/World.h"
 
 class GameServer {
 public:
@@ -27,7 +27,7 @@ public:
 
     bool IsRunning() const { return server_running_.load(); }
 
-    void ReloadScripts();
+    void ReloadScripts() const;
 
 private:
     void StartAccept();

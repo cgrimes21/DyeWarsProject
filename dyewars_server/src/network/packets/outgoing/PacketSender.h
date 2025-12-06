@@ -7,6 +7,7 @@
 #include "network/packets/Protocol.h"
 #include "network/packets/OpCodes.h"
 #include "server/ClientConnection.h"
+#include "game/Player.h"
 
 namespace Packets::PacketSender {
 

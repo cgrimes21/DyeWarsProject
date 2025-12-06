@@ -2,32 +2,35 @@
 /// DyeWarsServer
 /// Created by Anonymous on Dec 05, 2025
 /// =======================================
-#include "GameServer.h"
 #include "ClientConnection.h"
-#include "network/BandwidthMonitor.h"
-#include "lua/LuaEngine.h"
 #include "network/packets/outgoing/PacketSender.h"
 #include "core/Log.h"
+#include "GameServer.h"
+#include "lua/LuaEngine.h"
+#include "network/BandwidthMonitor.h"
+
 
 GameServer::GameServer(asio::io_context& io_context)
-        : io_context_(io_context),
-         acceptor_(io_context,
-                    asio::ip::tcp::endpoint(
-                            asio::ip::address::from_string(Protocol::ADDRESS),
-                            Protocol::PORT)),
-          lua_engine_(std::make_shared<LuaGameEngine>()),
-              world_(10,10) {
-
+    : io_context_(io_context),
+      acceptor_(io_context,
+                asio::ip::tcp::endpoint(
+                    asio::ip::address::from_string(Protocol::ADDRESS),
+                    Protocol::PORT)),
+      lua_engine_(std::make_shared<LuaGameEngine>()),
+      world_(10, 10)
+{
     Log::Info("Server starting on port {}...", Protocol::PORT);
     StartAccept();
     game_loop_thread_ = std::thread(&GameServer::GameLogicThread, this);
 }
 
-GameServer::~GameServer() {
-        Shutdown();
+GameServer::~GameServer()
+{
+    Shutdown();
 }
 
-void GameServer::Shutdown() {
+void GameServer::Shutdown()
+{
     if (shutdown_requested_.exchange(true)) return;
 
     Log::Info("Shutting down server...");
@@ -41,7 +44,8 @@ void GameServer::Shutdown() {
     clients_.CloseAll();
 
     // Wait for game loop to finish
-    if (game_loop_thread_.joinable()) {
+    if (game_loop_thread_.joinable())
+    {
         game_loop_thread_.join();
     }
 
@@ -50,75 +54,90 @@ void GameServer::Shutdown() {
     Log::Info("Server shutdown complete");
 }
 
-void GameServer::ReloadScripts() {
-    if (lua_engine_) {
+void GameServer::ReloadScripts() const
+{
+    if (lua_engine_)
+    {
         lua_engine_->ReloadScripts();
     }
 }
 
-void GameServer::StartAccept() {
+void GameServer::StartAccept()
+{
     acceptor_.async_accept([this](
-            std::error_code ec,
-            asio::ip::tcp::socket socket) {
-        if (!ec && server_running_) {
-            // If we fail getting ip, close socket and listen for next connection
-            std::string ip;
-            try {
-                ip = socket.remote_endpoint().address().to_string();
-            }
-            catch (...) {
-                socket.close();
-                if (server_running_) StartAccept();
-                return;
-            }
-            Log::Info("IP: {} trying to connect.", ip);
+        const std::error_code ec,
+        asio::ip::tcp::socket socket)
+        {
+            if (!ec && server_running_)
+            {
+                // If we fail getting ip, close socket and listen for next connection
+                std::string ip;
+                try
+                {
+                    ip = socket.remote_endpoint().address().to_string();
+                }
+                catch (...)
+                {
+                    socket.close();
+                    if (server_running_) StartAccept();
+                    return;
+                }
+                Log::Info("IP: {} trying to connect.", ip);
 
-            if (limiter_.IsBanned(ip)) {
-                Log::Trace("Rejected banned IP: {}", ip);
-                socket.close();
-            }
-            else if (!limiter_.CheckRateLimit(ip)) {
-                Log::Trace("Rate limited IP: {}", ip);
-                socket.close();
-            }
-            else if (!limiter_.CanConnect(ip)) {
-                Log::Trace("Connection limit reached for IP: {}", ip);
-                socket.close();
-            }
-            else {
-                limiter_.AddConnection(ip);
+                if (limiter_.IsBanned(ip))
+                {
+                    Log::Trace("Rejected banned IP: {}", ip);
+                    socket.close();
+                }
+                else if (!limiter_.CheckRateLimit(ip))
+                {
+                    Log::Trace("Rate limited IP: {}", ip);
+                    socket.close();
+                }
+                else if (!limiter_.CanConnect(ip))
+                {
+                    Log::Trace("Connection limit reached for IP: {}", ip);
+                    socket.close();
+                }
+                else
+                {
+                    limiter_.AddConnection(ip);
 
-                uint64_t client_id = next_client_id_++;
+                    uint64_t client_id = next_client_id_++;
 
-                auto client = std::make_shared<ClientConnection>(
+                    const auto client = std::make_shared<ClientConnection>(
                         std::move(socket),
                         this,
                         client_id);
 
-                // Start the session's async read chain and handshake timer.
-                // The session keeps itself alive via shared_from_this() in its async callbacks.
-                // If the handshake fails or times out, the session will clean itself up.
-                client->Start();
+                    // Start the session's async read chain and handshake timer.
+                    // The session keeps itself alive via shared_from_this() in its async callbacks.
+                    // If the handshake fails or times out, the session will clean itself up.
+                    client->Start();
+                }
             }
-        }
-        else if ( ec && server_running_) {
-            // Only log if it's not a shutdown
-            Log::Error("Accept failed: {}", ec.message());
-        }
-        // Only restart if still running
-        if (server_running_) {
-            StartAccept();
-        }
-    });
+            else if (ec && server_running_)
+            {
+                // Only log if it's not a shutdown
+                Log::Error("Accept failed: {}", ec.message());
+            }
+            // Only restart if still running
+            if (server_running_)
+            {
+                StartAccept();
+            }
+        });
 }
 
-void GameServer::GameLogicThread() {
+void GameServer::GameLogicThread()
+{
     const int TICKS_PER_SECOND = 20;
     const std::chrono::milliseconds TICK_RATE(1000 / TICKS_PER_SECOND); // 50ms
 
     Log::Info("Game loop started ({} ticks/sec)", TICKS_PER_SECOND);
 
-    while (server_running_) {
+    while (server_running_)
+    {
         auto start_time = std::chrono::steady_clock::now();
 
         // 1. Process Logic
@@ -128,8 +147,8 @@ void GameServer::GameLogicThread() {
         // 2. Sleep until next tick
         //auto end_time = std::chrono::steady_clock::now();
         //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        auto elapsed = std::chrono::steady_clock::now() - start_time;
-        if (elapsed < TICK_RATE) {
+        if (auto elapsed = std::chrono::steady_clock::now() - start_time; elapsed < TICK_RATE)
+        {
             std::this_thread::sleep_for(TICK_RATE - elapsed);
         }
     }
@@ -137,10 +156,11 @@ void GameServer::GameLogicThread() {
 }
 
 // TODO Overhaul
-void GameServer::ProcessTick() {
+void GameServer::ProcessTick()
+{
     // Process all queued commands from network thread
-    auto updated_players = players_.ProcessCommands(world_.GetMap(), clients_);
-    if(updated_players.empty()) return;
+    const auto updated_players = players_.ProcessCommands(world_.GetMap(), clients_);
+    if (updated_players.empty()) return;
 
     ///
     /// Authorize Movement
@@ -148,7 +168,8 @@ void GameServer::ProcessTick() {
 
     // TODO: Implement view-based broadcasting
     // Broadcast updates to all clients
-    for (const auto& player : updated_players) {
+    for (const auto& player : updated_players)
+    {
         uint64_t player_id = player->GetID();
         int16_t x = player->GetX();
         int16_t y = player->GetY();
@@ -168,13 +189,15 @@ void GameServer::ProcessTick() {
     }
 
     // Call Lua hooks
-    if (lua_engine_) {
-        for (const auto& player : updated_players) {
+    if (lua_engine_)
+    {
+        for (const auto& player : updated_players)
+        {
             lua_engine_->OnPlayerMoved(
-                    player->GetID(),
-                    player->GetX(),
-                    player->GetY(),
-                    player->GetFacing());
+                player->GetID(),
+                player->GetX(),
+                player->GetY(),
+                player->GetFacing());
         }
     }
 
@@ -221,7 +244,8 @@ void GameServer::ProcessTick() {
      */
 }
 
-void GameServer::OnClientLogin(std::shared_ptr<ClientConnection> client) {
+void GameServer::OnClientLogin(std::shared_ptr<ClientConnection> client)
+{
     // Register with client manager
     clients_.AddClient(client);
 
@@ -231,11 +255,12 @@ void GameServer::OnClientLogin(std::shared_ptr<ClientConnection> client) {
     Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
 
     // Send welcome packet to this client
-    Packets::PacketSender::Welcome(client,player);
+    Packets::PacketSender::Welcome(client, player);
 
     // Send existing players to this client
     auto all_players = players_.GetAllPlayers();
-    for (const auto &other: all_players) {
+    for (const auto& other : all_players)
+    {
         if (other->GetID() == player->GetID()) continue;
 
         Packets::PacketSender::PlayerJoined(client,
@@ -246,12 +271,13 @@ void GameServer::OnClientLogin(std::shared_ptr<ClientConnection> client) {
     }
     // Broadcast this player joined to everyone else
     clients_.BroadcastToOthers(
-            client->GetClientID(),
-           [&](const std::shared_ptr<ClientConnection> &conn) {
-               Packets::PacketSender::PlayerJoined(conn,
-               player->GetID(),
-               player->GetX(),
-               player->GetY(),
-               player->GetFacing());
-               });
+        client->GetClientID(),
+        [&](const std::shared_ptr<ClientConnection>& conn)
+        {
+            Packets::PacketSender::PlayerJoined(conn,
+                                                player->GetID(),
+                                                player->GetX(),
+                                                player->GetY(),
+                                                player->GetFacing());
+        });
 }
