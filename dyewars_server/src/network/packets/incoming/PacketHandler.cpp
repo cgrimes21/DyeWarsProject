@@ -7,7 +7,7 @@
 #include "server/GameServer.h"
 #include "network/Packets/Protocol.h"
 #include "network/packets/Opcodes.h"
-#include "game/Actions.h"
+#include "game/actions/Actions.h"
 #include "core/Log.h"
 
 namespace PacketHandler{
@@ -50,7 +50,7 @@ namespace PacketHandler{
                     return;
                 }
                 // Queue the action - will be processed in game loop
-                server->Players().QueueAction(Actions::MoveCommand{
+                server->Players().QueueAction(Actions::Movement::MoveCommand{
                     player_id,
                     direction,
                     facing
@@ -70,7 +70,7 @@ namespace PacketHandler{
                     return;
                 }
 
-                server->Players().QueueAction(Actions::TurnCommand{
+                server->Players().QueueAction(Actions::Movement::TurnCommand{
                         player_id,
                         direction
                 }, client_id);

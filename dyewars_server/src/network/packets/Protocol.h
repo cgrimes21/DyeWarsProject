@@ -28,6 +28,9 @@ namespace Protocol {
     // Timing
     constexpr int HANDSHAKE_TIMEOUT_SECONDS = 5;
 
+    // Leniency / Hacking
+    constexpr uint8_t MAX_HEADER_VIOLATIONS = 3;
+
     struct Packet {
         uint8_t header[2] = {Protocol::MAGIC_1, Protocol::MAGIC_2};
         uint16_t size;

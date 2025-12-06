@@ -5,6 +5,7 @@
 #pragma once
 #include <cstdint>
 #include <atomic>
+#include <chrono>
 #include "game/TileMap.h"
 
 class Player
@@ -12,9 +13,12 @@ class Player
 public:
     Player(uint64_t id, int start_x, int start_y);
 
-    bool AttemptMove(uint8_t direction, const TileMap &map);
+    bool AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &map);
+    bool AttemptTurn(uint8_t new_facing);
+
     void SetFacing(uint8_t direction);
     void SetPosition(int16_t x, int16_t y);
+
 
     // Getters
     uint64_t GetID() const { return id_; }
@@ -37,4 +41,8 @@ private:
     int y_;
     uint8_t facing_ = 2; // Default: facing down (0=up, 1=right, 2=down, 3=left)
     std::atomic<bool> is_dirty_{false};
+
+    // Move Time Limits
+    std::chrono::steady_clock::time_point last_move_time_{};
+    std::chrono::steady_clock::time_point last_turn_time_{};
 };

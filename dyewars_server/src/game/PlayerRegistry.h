@@ -9,20 +9,13 @@
 #include <unordered_map>
 #include <random>
 #include "Player.h"
-#include "Actions.h"
+#include "game/actions/Actions.h"
 #include "server/ClientManager.h"
 
+// TODO Move this to? tilemap?
 enum class SpawnPoints : uint32_t {
     mainArea = 0x00050005,
 };
-struct MoveCommand {
-    uint64_t player_id;
-    uint8_t direction;
-    uint8_t facing;
-};
-using Action = std::variant<
-        MoveCommand
-        >;
 
 class TileMap;
 
@@ -53,6 +46,11 @@ public:
     std::vector<std::shared_ptr<Player>> GetDirtyPlayers();
     size_t Count();
 
+    // Move timings + network grace
+    static constexpr auto MOVE_COOLDOWN = std::chrono::milliseconds(330);  // 350ms - 20ms grace
+    static constexpr auto TURN_COOLDOWN = std::chrono::milliseconds(200);  // 220ms - 20ms grace
+    static constexpr auto NETWORK_GRACE = std::chrono::milliseconds(20);
+
 private:
     uint64_t GenerateUniqueID();
 
@@ -65,4 +63,5 @@ private:
 
     std::mt19937 rng_{std::random_device{}()};
     std::uniform_int_distribution<uint32_t> id_dist_{1, UINT32_MAX};
+
 };

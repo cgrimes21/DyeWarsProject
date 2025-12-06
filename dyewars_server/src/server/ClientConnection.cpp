@@ -17,7 +17,7 @@ ClientConnection::ClientConnection(asio::ip::tcp::socket socket,
         handshake_timer_(socket_.get_executor())
         {
             try{
-                client_ip_ = socket.remote_endpoint().address().to_string();
+                client_ip_ = socket_.remote_endpoint().address().to_string();
                 // TODO DNS lookup is slow, move to worker thread
                 client_hostname_ = client_ip_;
             } catch (...) {
@@ -27,11 +27,7 @@ ClientConnection::ClientConnection(asio::ip::tcp::socket socket,
         }
 
 ClientConnection::~ClientConnection(){
-    try {
-        Disconnect("");
-    } catch (...) {
-        // Ignore errors during destruction
-    }
+    CloseSocket();
 }
 
 void ClientConnection::Start() {
@@ -45,20 +41,50 @@ void ClientConnection::Start() {
 }
 
 void ClientConnection::Disconnect(const std::string& reason) {
-    if (!reason.empty()) {
-        Log::Debug("Client {} disconnecting: {}", client_id_, reason);
+    // Prevent double-disconnect from concurrent calls
+    bool expected = false;
+    if (!disconnecting_.compare_exchange_strong(expected, true)) {
+        return;
     }
 
-    server_->Players().RemoveByClientID(client_id_);
-    server_->Clients().RemoveClient(client_id_);
-    server_->Limiter().RemoveConnection(client_ip_);
+    // Keep ourselves alive for the duration of this function
+    auto self = shared_from_this();
+
+    // Capture these before any cleanup since we need them for logging
+    const auto id = client_id_;
+    const auto ip = client_ip_;
+
+
+    if (!reason.empty()) {
+        Log::Debug("Client {} disconnecting because: {}", client_id_, reason);
+    }
+
+    // Close any pending I/O
+    handshake_timer_.cancel();
     CloseSocket();
-    Log::Debug("Client {} IP: {} disconnected.", client_id_, client_ip_);
+
+    // These are deleting refs to the shared pointer of our ClientConnection.
+    // They will call the destructor at the end here, or somewhere in between.
+    // Do we hold one last shared_ptr open while we're clearing? Yes
+    // We use auto self = shared from this above
+
+    // Each cleanup is independent - don't let one failure stop the others
+    // These functions are silent no-ops but mutex or Log could throw still
+    // Highly unlikely but it would throw off the state of the server
+    try { server_->Players().RemoveByClientID(id); }
+    catch (const std::exception& e) { Log::Error("Failed to remove player {}: {}", id, e.what()); }
+
+    try { server_->Clients().RemoveClient(id); }
+    catch (const std::exception& e) { Log::Error("Failed to remove client {}: {}", id, e.what()); }
+
+    try { server_->Limiter().RemoveConnection(ip); }
+    catch (const std::exception& e) { Log::Error("Failed to remove limiter {}: {}", ip, e.what()); }
+
+    Log::Info("Client {} IP: {} disconnected.", id, ip);
 }
 
 void ClientConnection::CloseSocket() {
     std::error_code ec;
-    handshake_timer_.cancel();
     if (socket_.is_open()) {
         socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
         socket_.close(ec);
@@ -77,10 +103,14 @@ void ClientConnection::SendPacket(const Protocol::Packet& pkt) {
     BandwidthMonitor::Instance().RecordOutgoing(data->size());
 
     asio::async_write(socket_, asio::buffer(*data),
-        [this, self, data](std::error_code ec, std::size_t) {});
+        [this, self, data](std::error_code ec, std::size_t) {
+            if (ec && ec != asio::error::operation_aborted) {
+                Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
+            }
+    });
 }
 
-void ClientConnection::RawSend(std::shared_ptr<std::vector<uint8_t>> data) {
+void ClientConnection::RawSend(const std::shared_ptr<std::vector<uint8_t>> &data) {
     // Track bandwidth
     BandwidthMonitor::Instance().RecordOutgoing(data->size());
 
@@ -88,6 +118,9 @@ void ClientConnection::RawSend(std::shared_ptr<std::vector<uint8_t>> data) {
     asio::async_write(socket_, asio::buffer(*data),
         [this, self, data](std::error_code ec, std::size_t) {
             // Error handling
+            if (ec && ec != asio::error::operation_aborted) {
+                Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
+            }
         });
 }
 
@@ -97,34 +130,38 @@ void ClientConnection::ReadPacketHeader() {
     asio::async_read(socket_, asio::buffer(header_buffer_, 4),
                      [this, self](std::error_code ec, std::size_t) {
                          if (ec) {
+                             Disconnect(handshake_complete_ ? "connection lost" : "connection closed before handshake");
+                             return;
+                         }
+
+                         // Validate header
+                         if (header_buffer_[0] != Protocol::MAGIC_1 ||
+                             header_buffer_[1] != Protocol::MAGIC_2) {
+
                              if (!handshake_complete_) {
-                                 Disconnect("connection closed before handshake");
+                                 Log::Trace(
+                                         "Invalid magic bytes from client: {} when expecting handshake. Got 0x{:02X} 0x{:02X}",
+                                         client_id_, header_buffer_[0], header_buffer_[1]);
+                                 FailHandshake("invalid header while waiting for handshake");
                              } else {
-                                 Log::Info("Client {} disconnected.", client_id_);
+                                 Log::Warn("Client {} sent invalid magic bytes", client_id_);
+                                 HandleProtocolViolation();
                              }
                              return;
                          }
 
-                         if (header_buffer_[0] == Protocol::MAGIC_1 &&
-                             header_buffer_[1] == Protocol::MAGIC_2) {
-                             uint16_t size = (header_buffer_[2] << 8) | header_buffer_[3];
-
-                             if (size > 0 && size < Protocol::MAX_PAYLOAD_SIZE) {
-                                 ReadPacketPayload(size);
-                             } else {
-                                 Log::Warn("Client {} sent invalid size: {}", client_id_, size);
-                                 if(socket_.is_open()) ReadPacketHeader();
-                             }
-                         } else {
-                             // Invalid magic bytes
+                         // Validate size
+                         uint16_t size = (header_buffer_[2] << 8) | header_buffer_[3];
+                         if (size == 0 || size >= Protocol::MAX_PAYLOAD_SIZE) {
+                             Log::Warn("Client {} sent invalid size: {}", client_id_, size);
                              if (!handshake_complete_) {
-                                 Log::Debug("Invalid magic bytes from client: {} when expecting handshake. Got 0x{:02X} 0x{:02X}",
-                                           client_id_, (int)header_buffer_[0],(int)header_buffer_[1]);
-                                 FailHandshake("invalid header while waiting for handshake");
+                                 FailHandshake("invalid packet size");
                              } else {
-                                 ReadPacketHeader();
+                                 HandleProtocolViolation();
                              }
+                             return;
                          }
+                         ReadPacketPayload(size);
                      });
 }
 
@@ -275,7 +312,13 @@ void ClientConnection::LogPacketReceived(const std::vector<uint8_t>& payload, ui
     std::cout << std::dec << " (" << size << " bytes)" << std::endl;
 }
 
-
+void ClientConnection::HandleProtocolViolation() {
+    if (++protocol_violations_ >= Protocol::MAX_HEADER_VIOLATIONS) {
+        Disconnect("too many protocol violations");
+    } else if (socket_.is_open()) {
+        ReadPacketHeader();
+    }
+}
 
 // --- SENDING FUNCTIONS ---
 /*

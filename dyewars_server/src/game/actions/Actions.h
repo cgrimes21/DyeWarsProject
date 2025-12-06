@@ -12,20 +12,24 @@ class Player;
 struct GameContext;
 
 namespace Actions {
-    struct MoveCommand {
-        uint64_t player_id;
-        uint8_t direction;
-        uint8_t facing;
+    namespace Movement {
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
-    };
+        struct MoveCommand {
+            uint64_t player_id;
+            uint8_t direction;
+            uint8_t facing;
 
-    struct TurnCommand {
-        uint64_t player_id;
-        uint8_t direction;
+            std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        };
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
-    };
+        struct TurnCommand {
+            uint64_t player_id;
+            uint8_t direction;
+
+            std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        };
+
+    }
 
     struct ChatCommand {
         uint64_t player_id;
@@ -60,8 +64,8 @@ namespace Actions {
     };
 
     using Action = std::variant<
-            MoveCommand,
-            TurnCommand,
+            Movement::MoveCommand,
+            Movement::TurnCommand,
             ChatCommand,
             WarpCommand,
             AttackCommand,

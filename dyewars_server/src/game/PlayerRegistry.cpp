@@ -21,7 +21,7 @@ shared_ptr<Player> PlayerRegistry::CreatePlayer(uint64_t client_id) {
         players_[player_id] = player;
         client_to_player_[client_id] = player_id;
     }
-    Log::Info("Player {} created for client {}", player_id, client_id);
+    Log::Trace("Player {} created for client {}", player_id, client_id);
     return player;
 }
 

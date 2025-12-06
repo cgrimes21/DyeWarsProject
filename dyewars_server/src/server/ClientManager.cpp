@@ -78,21 +78,18 @@ size_t ClientManager::Count()
 /// Closes all client connections
 /// </summary>
 void ClientManager::CloseAll() {
-	std::vector<std::shared_ptr<ClientConnection>> clients;
+	std::unordered_map<uint64_t, std::shared_ptr<ClientConnection>> snapshot;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
-		clients.reserve(clients_.size());
-		for (const auto &[id, conn]: clients_) {
-			clients.push_back(conn);
-		}
-		clients_.clear();
+		snapshot = std::move(clients_);
 	}// Lock released
 
-	for(auto &conn : clients)
+	for(auto &[id, conn] : snapshot){
 		conn->CloseSocket();
+	}
 	// Disconnect tries to lock clientmanager, we just deleted it above.
 	// Player registry is in weird state, everything is shutting down.
 	// Closing socket is the move here. We're closing all connections anyway, no need to
 	// Attempt to keep state of lists clean
 		//conn->Disconnect("Mass D/C From ClientManager");
-}
+} // snapshot dies here, dropping all shared_ptrs

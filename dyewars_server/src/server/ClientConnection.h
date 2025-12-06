@@ -20,7 +20,7 @@ public:
 
     // Packet Sending
     void SendPacket(const Protocol::Packet& pkt);
-    void RawSend(std::shared_ptr<std::vector<uint8_t>> data);
+    void RawSend(const std::shared_ptr<std::vector<uint8_t>> &data);
 
     // Identity
     uint64_t GetClientID() const { return client_id_; }
@@ -46,6 +46,7 @@ private:
     // Logging
     void LogFailedConnection(const std::string& reason);
     void LogPacketReceived(const std::vector<uint8_t>& payload, uint16_t size);
+    void HandleProtocolViolation();
 
     /*
     void SendPlayerID();
@@ -69,6 +70,10 @@ private:
 
     // State
     bool handshake_complete_ = false;
+    std::atomic<bool> disconnecting_ {false};
+
+    // Lenient wrong header strikes
+    uint8_t protocol_violations_ {0};
 
     // Back Reference (non owning)
     GameServer* server_;
