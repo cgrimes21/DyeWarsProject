@@ -154,19 +154,14 @@ void GameServer::GameLogicThread() {
 // TODO Overhaul
 void GameServer::ProcessTick() {
     // Process all queued commands from network thread
-    //const auto updated_players = players_.ProcessCommands(world_.GetMap(), clients_);
-    //if (updated_players.empty()) return;
-
     ProcessActionQueue();
 
-    ///
-    /// Authorize Movement
-    ///
+    auto dirty_players = players_.ConsumeDirtyPlayers();
+    if (dirty_players.empty()) return;
 
-    auto dirty = players_.ConsumeDirtyPlayers();
     // TODO: Implement view-based broadcasting
     // Broadcast updates to all clients
-    for (const auto &player: dirty) {
+    for (const auto &player: dirty_players) {
         uint64_t player_id = player->GetID();
         int16_t x = player->GetX();
         int16_t y = player->GetY();
@@ -185,9 +180,43 @@ void GameServer::ProcessTick() {
         });*/
     }
 
+
+
+    //.size() returns an int. going from 4 bytes to 1 byte, so we need a static cast
+    //const auto count = static_cast<uint8_t>(dirty_players.size());
+    Protocol::Packet batch;
+    Protocol::PacketWriter::WriteByte(batch.payload,
+        Protocol::Opcode::Batch::S_RemotePlayer_Update); // should be 20 for client
+    // We can fit about 200 player updates in a standard 1400 byte MTU packet.
+    // If you have more, you'd loop this, but for now let's assume < 200 moves/tick.
+    //Protocol::PacketWriter::WriteByte(batch.payload, count);
+
+    uint8_t processed = 0;
+    for (const auto& player : dirty_players) {
+        Protocol::PacketWriter::WriteUInt64(batch.payload, player->GetID());
+        Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetX()));
+        Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetY()));
+        Protocol::PacketWriter::WriteByte(batch.payload, player->GetFacing());
+        processed++;
+
+        // TODO Split into multiple packets
+        if (processed == 255) { break; }
+    }
+    batch.payload[1] = processed; // Set the number of players in the batch
+
+    //13 bytes per player * 255 = 3315, what is the size of uint16?
+    // Set the size of the payload
+    batch.size = static_cast<uint16_t>(batch.payload.size());
+    auto data = std::make_shared<std::vector<uint8_t>>(batch.ToBytes());
+
+    // Let's implement a playerregistry.GetAllPlayersInRange( X ) to grab a
+    // List of players our player can see to send them updates. is this how it works?
+
+
+
     // Call Lua hooks
     if (lua_engine_) {
-        for (const auto &player: players_.GetDirtyPlayers()) {
+        for (const auto &player: dirty_players) {
             lua_engine_->OnPlayerMoved(
                     player->GetID(),
                     player->GetX(),
@@ -195,7 +224,6 @@ void GameServer::ProcessTick() {
                     player->GetFacing());
         }
     }
-
 
     /* Packet Batch Example:
 
