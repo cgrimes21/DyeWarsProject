@@ -9,68 +9,63 @@
 #include <string>
 #include <memory>
 
+class GameServer;
+
 class Player;
 
-struct GameContext;
-
 namespace Actions {
+
     namespace Movement {
+        void Move(GameServer *server, uint64_t client_id, uint8_t direction, uint8_t facing);
 
-        struct MoveCommand {
-            uint64_t client_id;
-            uint8_t direction;
-            uint8_t facing;
+        void Turn(GameServer *server, uint64_t client_id, uint8_t facing);
 
-            std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-        };
-
-        struct TurnCommand {
-            uint64_t player_id;
-            uint8_t direction;
-
-            std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-        };
-
+        void Warp(GameServer *server, uint64_t client_id, uint16_t map_id, int16_t x, int16_t y);
     }
 
-    struct ChatCommand {
-        uint64_t player_id;
-        std::string message;
+    namespace Combat {
+        void Attack(GameServer *server, uint64_t client_id, uint64_t target_id);
 
-        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-    };
+        void UseSkill(GameServer *server, uint64_t client_id, uint16_t skill_id, int16_t target_x, int16_t target_y);
 
-    struct WarpCommand {
-        uint64_t player_id;
-        uint16_t map_id;
-        int16_t x;
-        int16_t y;
+        void UseItem(GameServer *server, uint64_t client_id, uint8_t slot);
+    }
 
-        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-    };
+    namespace Social {
+        void Say(GameServer *server, uint64_t client_id, const std::string &message);
 
-    struct AttackCommand {
-        uint64_t player_id;
-        uint64_t target_id;
+        void
+        Whisper(GameServer *server, uint64_t client_id, const std::string &target_name, const std::string &message);
 
-        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-    };
+        void Shout(GameServer *server, uint64_t client_id, const std::string &message);
+    }
 
-    struct SkillCommand {
-        uint32_t player_id;
-        uint16_t skill_id;
-        int16_t target_x;
-        int16_t target_y;
+    namespace Session {
+        void Login(GameServer *server, std::shared_ptr<class ClientConnection> client);
 
-        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
-    };
+        void Logout(GameServer *server, uint64_t client_id);
 
-    using Action = std::variant<
-            Movement::MoveCommand,
-            Movement::TurnCommand,
-            ChatCommand,
-            WarpCommand,
-            AttackCommand,
-            SkillCommand
-    >;
+        void Kick(GameServer *server, uint64_t client_id, const std::string &reason);
+    }
+
+    namespace Inventory {
+        void PickupItem(GameServer *server, uint64_t client_id, uint64_t entity_id);
+
+        void DropItem(GameServer *server, uint64_t client_id, uint8_t slot, uint16_t quantity);
+
+        void MoveItem(GameServer *server, uint64_t client_id, uint8_t from_slot, uint8_t to_slot);
+    }
+
+    namespace Trade {
+        void RequestTrade(GameServer *server, uint64_t client_id, uint64_t target_id);
+
+        void AcceptTrade(GameServer *server, uint64_t client_id);
+
+        void CancelTrade(GameServer *server, uint64_t client_id);
+
+        void AddItem(GameServer *server, uint64_t client_id, uint8_t slot, uint16_t quantity);
+
+        void ConfirmTrade(GameServer *server, uint64_t client_id);
+    }
+
 }

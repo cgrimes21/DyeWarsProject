@@ -34,12 +34,18 @@ public:
 
     void ReloadScripts() const;
 
+    // Queue an action from any thread (IO thread calls this)
+    void QueueAction(std::function<void()> action);
+
+
 private:
     void StartAccept();
 
     void GameLogicThread();
 
     void ProcessTick();
+
+    void ProcessActionQueue();
 
     // Network
     asio::io_context &io_context_;
@@ -54,6 +60,10 @@ private:
     PlayerRegistry players_;
     World world_;
     ConnectionLimiter limiter_;
+
+    //Main Action Queue
+    std::queue<std::function<void()>> action_queue_;
+    std::mutex action_mutex_;
 
     // Threads
     std::thread game_loop_thread_;

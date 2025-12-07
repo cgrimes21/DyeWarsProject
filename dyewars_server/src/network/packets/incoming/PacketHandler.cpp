@@ -21,7 +21,6 @@ namespace PacketHandler {
         // Validate packet size
         assert(data.size() <= Protocol::MAX_PAYLOAD_SIZE && "Packethandler handle data is over max protocol bytes");
 
-        uint64_t client_id = client->GetClientID();
 
         //
         // // Check if this client has a player
@@ -31,25 +30,26 @@ namespace PacketHandler {
         //     return;
         // }
 
-        size_t offset = 0;
+        uint8_t opcode = data[0];
 
-        switch (uint8_t opcode = Protocol::PacketReader::ReadByte(data, offset)) {
+        uint64_t client_id = client->GetClientID();
+        size_t offset = 0;
+        switch (opcode)
+            //uint8_t opcode = Protocol::PacketReader::ReadByte(data, offset))
+        {
             case Protocol::Opcode::Movement::C_Move_Request: {
 
                 // if (data.size() != Protocol::Opcode::Movement::C_Move_Request.size) {
                 //     Log::Warn("Packet size doesn't equal expected op code requirement: Line {}", __LINE__);
                 //     return;
                 // }
-
-                const uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
-                const uint8_t facing = Protocol::PacketReader::ReadByte(data, offset);
+                const uint8_t direction = data[1];
+                const uint8_t facing = data[1];
+//                const uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
+//                const uint8_t facing = Protocol::PacketReader::ReadByte(data, offset);
 
                 // Queue the action - will be processed in game loop
-                server->Players().QueueAction(Actions::Movement::MoveCommand{
-                        client_id,
-                        direction,
-                        facing
-                }, client_id);
+                Actions::Movement::Move(server, client->GetClientID(), direction, facing);
                 break;
             }
 
@@ -58,17 +58,10 @@ namespace PacketHandler {
                     Log::Warn("Turn packet too small from client {}", client_id);
                     return;
                 }
-
+                //uint8_t direction = data[1];
+                //uint8_t facing = data[2];
                 uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
-                if (direction > 3) {
-                    Log::Warn("Invalid turn direction from client {}", client_id);
-                    return;
-                }
-
-                server->Players().QueueAction(Actions::Movement::TurnCommand{
-                        client_id,
-                        direction
-                }, client_id);
+                Actions::Movement::Turn(server, client->GetClientID(), direction);
                 break;
             }
 

@@ -53,54 +53,6 @@ void PlayerRegistry::RemoveByClientID(uint64_t client_id) {
     }
 }
 
-
-void PlayerRegistry::QueueAction(const Actions::Action &action, uint64_t client_id) {
-    lock_guard<mutex> lock(mutex_);
-    auto it = client_to_player_.find(client_id);
-
-    action_queue_.push(action);
-}
-
-// TODO returns dirty players, but its calculated here. should calculate in subsystems
-std::vector<std::shared_ptr<Player>> PlayerRegistry::ProcessCommands(
-        TileMap &map,
-        ClientManager &clients) {
-
-    std::vector<std::shared_ptr<Player>> updated_players;
-    // Grab all queued actions
-    // Lock mutex, steal all queued actions, unlock immediately.
-    // Now we own actions locally, network thread can keep adding to action_queue_.
-    std::queue<Actions::Action> actions;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        //puts action queue into actions, and null into action que (swap)
-        //no allocation. just pointer swap
-        std::swap(actions, action_queue_);  // Grab all commands, release lock
-    }
-
-    GameContext ctx{*this, map, clients};
-
-    while (!actions.empty()) {
-        //Loop through each action, get reference to front.
-        //returns ref to first element in queue without removing it
-        auto &action = actions.front();
-
-        auto result = std::visit([&](auto &&cmd) {
-            return cmd.Execute(ctx);
-        }, action);
-
-        if (result) {
-            updated_players.push_back(result);
-        }
-
-        // Remove processed action from queue.
-        actions.pop();
-    }
-
-    // Return all players that need broadcast.
-    return updated_players;
-}
-
 // TODO check
 uint64_t PlayerRegistry::GetPlayerIDForClient(uint64_t client_id) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -158,4 +110,14 @@ uint64_t PlayerRegistry::GenerateUniqueID() {
         attempts++;
     }
     return 0;
+}
+
+void PlayerRegistry::MarkDirty(const shared_ptr<Player> &player) {
+    dirty_players_.insert(player);
+}
+
+std::vector<std::shared_ptr<Player>> PlayerRegistry::ConsumeDirtyPlayers() {
+    std::vector<std::shared_ptr<Player>> result(dirty_players_.begin(), dirty_players_.end());
+    dirty_players_.clear();
+    return result;
 }

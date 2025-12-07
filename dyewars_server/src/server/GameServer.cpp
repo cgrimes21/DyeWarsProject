@@ -154,16 +154,19 @@ void GameServer::GameLogicThread() {
 // TODO Overhaul
 void GameServer::ProcessTick() {
     // Process all queued commands from network thread
-    const auto updated_players = players_.ProcessCommands(world_.GetMap(), clients_);
-    if (updated_players.empty()) return;
+    //const auto updated_players = players_.ProcessCommands(world_.GetMap(), clients_);
+    //if (updated_players.empty()) return;
+
+    ProcessActionQueue();
 
     ///
     /// Authorize Movement
     ///
 
+    auto dirty = players_.ConsumeDirtyPlayers();
     // TODO: Implement view-based broadcasting
     // Broadcast updates to all clients
-    for (const auto &player: updated_players) {
+    for (const auto &player: dirty) {
         uint64_t player_id = player->GetID();
         int16_t x = player->GetX();
         int16_t y = player->GetY();
@@ -184,7 +187,7 @@ void GameServer::ProcessTick() {
 
     // Call Lua hooks
     if (lua_engine_) {
-        for (const auto &player: updated_players) {
+        for (const auto &player: players_.GetDirtyPlayers()) {
             lua_engine_->OnPlayerMoved(
                     player->GetID(),
                     player->GetX(),
@@ -236,37 +239,61 @@ void GameServer::ProcessTick() {
      */
 }
 
-void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) {
-    // Register with client manager
-    clients_.AddClient(client);
-
-    // Create player in registry
-    auto player = players_.CreatePlayer(client->GetClientID());
-
-    Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
-
-    // Send welcome packet to this client
-    Packets::PacketSender::Welcome(client, player);
-
-    // Send existing players to this client
-    auto all_players = players_.GetAllPlayers();
-    for (const auto &other: all_players) {
-        if (other->GetID() == player->GetID()) continue;
-
-        Packets::PacketSender::PlayerJoined(client,
-                                            other->GetID(),
-                                            other->GetX(),
-                                            other->GetY(),
-                                            other->GetFacing());
+void GameServer::ProcessActionQueue() {
+    std::queue<std::function<void()>> to_process;
+    {
+        std::lock_guard<std::mutex> lock(action_mutex_);
+        std::swap(to_process, action_queue_);
     }
-    // Broadcast this player joined to everyone else
-    clients_.BroadcastToOthers(
-            client->GetClientID(),
-            [&](const std::shared_ptr<ClientConnection> &conn) {
-                Packets::PacketSender::PlayerJoined(conn,
-                                                    player->GetID(),
-                                                    player->GetX(),
-                                                    player->GetY(),
-                                                    player->GetFacing());
-            });
+    while (!to_process.empty()) {
+        to_process.front()();
+        to_process.pop();
+    }
+}
+
+void GameServer::QueueAction(std::function<void()> action) {
+    {
+        std::lock_guard<std::mutex> lock(action_mutex_);
+        action_queue_.push(std::move(action));
+    }
+}
+
+void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) {
+    QueueAction([this, client] {
+        // Everything below now runs on game thread
+
+        // Register with client manager
+        clients_.AddClient(client);
+
+        // Create player in registry
+        auto player = players_.CreatePlayer(client->GetClientID());
+
+        Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
+
+        // Send welcome packet to this client
+        Packets::PacketSender::Welcome(client, player);
+
+        // Send existing players to this client
+        auto all_players = players_.GetAllPlayers();
+        for (const auto &other: all_players) {
+            if (other->GetID() == player->GetID()) continue;
+
+            Packets::PacketSender::PlayerJoined(client,
+                                                other->GetID(),
+                                                other->GetX(),
+                                                other->GetY(),
+                                                other->GetFacing());
+        }
+        // Broadcast this player joined to everyone else
+        clients_.BroadcastToOthers(
+                client->GetClientID(),
+                [&](const std::shared_ptr<ClientConnection> &conn) {
+                    Packets::PacketSender::PlayerJoined(conn,
+                                                        player->GetID(),
+                                                        player->GetX(),
+                                                        player->GetY(),
+                                                        player->GetFacing());
+                });
+    });
+
 }

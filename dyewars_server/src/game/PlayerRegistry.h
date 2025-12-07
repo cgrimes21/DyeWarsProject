@@ -12,6 +12,7 @@
 #include "Player.h"
 #include "game/actions/Actions.h"
 #include "server/ClientManager.h"
+#include <unordered_set>
 
 // TODO Move this to? tilemap?
 enum class SpawnPoints : uint32_t {
@@ -41,12 +42,11 @@ public:
     uint64_t GetPlayerIDForClient(uint64_t client_id);
 
     // Command queue (called from packet handlers on io thread)
-    void QueueAction(const Actions::Action &action, uint64_t client_id);
+    //void QueueAction(const Actions::Action &action, uint64_t client_id);
 
-    // Process all queued commands (called from game loop)
-    std::vector<std::shared_ptr<Player>> ProcessCommands(
-            TileMap &map,
-            ClientManager &manager);
+    void MarkDirty(const std::shared_ptr<Player> &player);
+
+    std::vector<std::shared_ptr<Player>> ConsumeDirtyPlayers();
 
     // Queries
     std::vector<std::shared_ptr<Player>> GetAllPlayers();
@@ -63,8 +63,10 @@ public:
 private:
     uint64_t GenerateUniqueID();
 
-    std::queue<Actions::Action> action_queue_;
+    //std::queue<Actions::Action> action_queue_;
+
     std::unordered_map<uint64_t, std::shared_ptr<Player>> players_;
+    std::unordered_set<std::shared_ptr<Player>> dirty_players_;
     std::unordered_map<uint32_t, uint32_t> client_to_player_;
     std::mutex mutex_;
 
