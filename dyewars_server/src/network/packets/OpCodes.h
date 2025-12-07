@@ -40,13 +40,14 @@ struct OpCodeInfo {
     const char *desc;
     const char *name;
     bool implemented = false;
-    uint8_t payloadSize = -1;   //-1 varying
+    uint8_t payloadSize = -1; //-1 varying
 };
 
 namespace Protocol::Opcode {
     enum class ServerOpcode : uint8_t {
         Handshake_Accepted = 0xF0,
     };
+
     namespace Server {
         // ========================================================================
         // CONNECTION & HANDSHAKE - 0xF0 - 0xFF
@@ -56,18 +57,20 @@ namespace Protocol::Opcode {
             // Payload: [serverVersion:2][serverMagic:4]
             //constexpr uint8_t S_Handshake_Accepted = 0xF0;
             constexpr OpCodeInfo S_HandshakeAccepted = {
-                    0xF0,
-                    "Server sending to client that client's handshake was successful.",
-                    "Handshake Accepted",
-                    false,
-                    6};
+                0xF0,
+                "Server sending to client that client's handshake was successful.",
+                "Handshake Accepted",
+                false,
+                6
+            };
 
             constexpr OpCodeInfo S_ServerShutdown = {
-                    0xF2,
-                    "Server cleanly disconnects client due to shutdown.",
-                    "Server Shutdown",
-                    true,
-                    2};
+                0xF2,
+                "Server cleanly disconnects client due to shutdown.",
+                "Server Shutdown",
+                true,
+                2
+            };
 
             // Server rejects handshake.
             // Payload: [reasonCode:1][reasonLength:1][reason:variable]
@@ -89,23 +92,22 @@ namespace Protocol::Opcode {
             // Payload: (none)
             constexpr uint8_t S_Heartbeat_Response = 0xFB;
         }
-
-
     }
+
     namespace Client {
         // ========================================================================
         // CONNECTION & HANDSHAKE
         // ========================================================================
         namespace Connection {
-
             /// Initial connection handshake from client.\n
             /// Payload: [version:2][clientMagic:4]
             constexpr OpCodeInfo C_Handshake_Request = {
-                    0x00,
-                    "Client sending first handshake to server.",
-                    "Client-Server Handshake Request",
-                    true,
-                    7};
+                0x00,
+                "Client sending first handshake to server.",
+                "Client-Server Handshake Request",
+                true,
+                7
+            };
 
             // Client requests graceful disconnect.
             // Payload: (none)
@@ -152,7 +154,7 @@ namespace Protocol::Opcode {
     // ========================================================================
     namespace LocalPlayer {
         // Welcome packet with player ID and initial state.
-        // Payload: [playerId:4][x:2][y:2][facing:1]
+        // Payload: [playerId:8][x:2][y:2][facing:1]
         constexpr uint8_t S_Welcome = 0x10;
 
         // Position correction.
@@ -469,7 +471,6 @@ namespace Protocol::Opcode {
         // Payload: [serverTime:4]
         constexpr uint8_t S_Time_Sync = 0xF4;
     }
-
 } // namespace Protocol::Opcode
 
 // ============================================================================
@@ -477,97 +478,96 @@ namespace Protocol::Opcode {
 // ============================================================================
 namespace Protocol::PayloadSize {
     // Connection
-    constexpr size_t C_Connection_Handshake_Request = 7;        // opcode + version(2) + magic(4)
-    constexpr size_t S_Connection_Handshake_Accepted = 7;       // opcode + version(2) + magic(4)
-    constexpr size_t C_Connection_Ping_Request = 5;             // opcode + timestamp(4)
-    constexpr size_t S_Connection_Pong_Response = 5;            // opcode + timestamp(4)
-    constexpr size_t S_Connection_Ping_Request = 5;             // opcode + timestamp(4)
-    constexpr size_t C_Connection_Pong_Response = 5;            // opcode + timestamp(4)
-    constexpr size_t C_Connection_Heartbeat_Request = 1;        // opcode only
-    constexpr size_t S_Connection_Heartbeat_Response = 1;       // opcode only
-    constexpr size_t C_Connection_Disconnect_Request = 1;       // opcode only
-    constexpr size_t S_Connection_Disconnect_Acknowledged = 1;  // opcode only
+    constexpr size_t C_Connection_Handshake_Request = 7; // opcode + version(2) + magic(4)
+    constexpr size_t S_Connection_Handshake_Accepted = 7; // opcode + version(2) + magic(4)
+    constexpr size_t C_Connection_Ping_Request = 5; // opcode + timestamp(4)
+    constexpr size_t S_Connection_Pong_Response = 5; // opcode + timestamp(4)
+    constexpr size_t S_Connection_Ping_Request = 5; // opcode + timestamp(4)
+    constexpr size_t C_Connection_Pong_Response = 5; // opcode + timestamp(4)
+    constexpr size_t C_Connection_Heartbeat_Request = 1; // opcode only
+    constexpr size_t S_Connection_Heartbeat_Response = 1; // opcode only
+    constexpr size_t C_Connection_Disconnect_Request = 1; // opcode only
+    constexpr size_t S_Connection_Disconnect_Acknowledged = 1; // opcode only
 
     // Movement
-    constexpr size_t C_Movement_Move_Request = 3;               // opcode + direction + facing
-    constexpr size_t C_Movement_Turn_Request = 2;               // opcode + direction
-    constexpr size_t C_Movement_Warp_Request = 7;               // opcode + mapId(2) + x(2) + y(2)
-    constexpr size_t C_Movement_Interact_Request = 1;           // opcode only
+    constexpr size_t C_Movement_Move_Request = 3; // opcode + direction + facing
+    constexpr size_t C_Movement_Turn_Request = 2; // opcode + direction
+    constexpr size_t C_Movement_Warp_Request = 7; // opcode + mapId(2) + x(2) + y(2)
+    constexpr size_t C_Movement_Interact_Request = 1; // opcode only
 
     // LocalPlayer
-    constexpr size_t S_LocalPlayer_Welcome = 10;                // opcode + id(4) + x(2) + y(2) + facing
-    constexpr size_t S_LocalPlayer_Position_Correction = 6;     // opcode + x(2) + y(2) + facing
-    constexpr size_t S_LocalPlayer_Facing_Correction = 2;       // opcode + facing
-    constexpr size_t S_LocalPlayer_Stats_Update = 9;            // opcode + hp(2) + maxHp(2) + mp(2) + maxMp(2)
-    constexpr size_t S_LocalPlayer_Exp_Gained = 9;              // opcode + expGained(4) + totalExp(4)
-    constexpr size_t S_LocalPlayer_Level_Up = 2;                // opcode + level
-    constexpr size_t S_LocalPlayer_Died = 1;                    // opcode only
-    constexpr size_t S_LocalPlayer_Respawned = 5;               // opcode + x(2) + y(2)
-    constexpr size_t S_LocalPlayer_Warped = 7;                  // opcode + mapId(2) + x(2) + y(2)
+    constexpr size_t S_LocalPlayer_Welcome = 10; // opcode + id(4) + x(2) + y(2) + facing
+    constexpr size_t S_LocalPlayer_Position_Correction = 6; // opcode + x(2) + y(2) + facing
+    constexpr size_t S_LocalPlayer_Facing_Correction = 2; // opcode + facing
+    constexpr size_t S_LocalPlayer_Stats_Update = 9; // opcode + hp(2) + maxHp(2) + mp(2) + maxMp(2)
+    constexpr size_t S_LocalPlayer_Exp_Gained = 9; // opcode + expGained(4) + totalExp(4)
+    constexpr size_t S_LocalPlayer_Level_Up = 2; // opcode + level
+    constexpr size_t S_LocalPlayer_Died = 1; // opcode only
+    constexpr size_t S_LocalPlayer_Respawned = 5; // opcode + x(2) + y(2)
+    constexpr size_t S_LocalPlayer_Warped = 7; // opcode + mapId(2) + x(2) + y(2)
 
     // Map (header sizes, tile data is variable)
-    constexpr size_t S_Map_Tile_Data_Header = 9;                // opcode + mapId(2) + originX(2) + originY(2) + width + height
-    constexpr size_t S_Map_Tile_Update_Header = 2;              // opcode + count
-    constexpr size_t S_Map_Tile_Update_PerTile = 6;             // x(2) + y(2) + tileId(2)
-    constexpr size_t S_Map_Map_Info_Header = 8;                 // opcode + mapId(2) + width(2) + height(2) + flags
-    constexpr size_t S_Map_Object_Data_Header = 7;              // opcode + originX(2) + originY(2) + width + height
-    constexpr size_t S_Map_Collision_Data_Header = 7;           // opcode + originX(2) + originY(2) + width + height
+    constexpr size_t S_Map_Tile_Data_Header = 9; // opcode + mapId(2) + originX(2) + originY(2) + width + height
+    constexpr size_t S_Map_Tile_Update_Header = 2; // opcode + count
+    constexpr size_t S_Map_Tile_Update_PerTile = 6; // x(2) + y(2) + tileId(2)
+    constexpr size_t S_Map_Map_Info_Header = 8; // opcode + mapId(2) + width(2) + height(2) + flags
+    constexpr size_t S_Map_Object_Data_Header = 7; // opcode + originX(2) + originY(2) + width + height
+    constexpr size_t S_Map_Collision_Data_Header = 7; // opcode + originX(2) + originY(2) + width + height
 
     // RemotePlayer
-    constexpr size_t S_RemotePlayer_Left_Range = 5;             // opcode + id(4)
-    constexpr size_t S_RemotePlayer_Died = 5;                   // opcode + id(4)
-    constexpr size_t S_RemotePlayer_Respawned = 9;              // opcode + id(4) + x(2) + y(2)
-    constexpr size_t S_RemotePlayer_Left_Game = 5;              // opcode + id(4)
+    constexpr size_t S_RemotePlayer_Left_Range = 5; // opcode + id(4)
+    constexpr size_t S_RemotePlayer_Died = 5; // opcode + id(4)
+    constexpr size_t S_RemotePlayer_Respawned = 9; // opcode + id(4) + x(2) + y(2)
+    constexpr size_t S_RemotePlayer_Left_Game = 5; // opcode + id(4)
 
     // Entity
-    constexpr size_t S_Entity_Entered_Range = 13;               // opcode + id(4) + type + x(2) + y(2) + facing + appearanceId(2)
-    constexpr size_t S_Entity_Left_Range = 5;                   // opcode + id(4)
-    constexpr size_t S_Entity_Position_Update = 10;             // opcode + id(4) + x(2) + y(2) + facing
-    constexpr size_t S_Entity_State_Changed = 6;                // opcode + id(4) + state
-    constexpr size_t S_Entity_Target_Changed = 10;              // opcode + id(4) + targetType + targetId(4)
-    constexpr size_t S_Entity_Died = 5;                         // opcode + id(4)
-    constexpr size_t S_Entity_Respawned = 9;                    // opcode + id(4) + x(2) + y(2)
+    constexpr size_t S_Entity_Entered_Range = 13; // opcode + id(4) + type + x(2) + y(2) + facing + appearanceId(2)
+    constexpr size_t S_Entity_Left_Range = 5; // opcode + id(4)
+    constexpr size_t S_Entity_Position_Update = 10; // opcode + id(4) + x(2) + y(2) + facing
+    constexpr size_t S_Entity_State_Changed = 6; // opcode + id(4) + state
+    constexpr size_t S_Entity_Target_Changed = 10; // opcode + id(4) + targetType + targetId(4)
+    constexpr size_t S_Entity_Died = 5; // opcode + id(4)
+    constexpr size_t S_Entity_Respawned = 9; // opcode + id(4) + x(2) + y(2)
 
     // Batch
-    constexpr size_t S_Batch_RemotePlayer_Update_Header = 2;    // opcode + count
+    constexpr size_t S_Batch_RemotePlayer_Update_Header = 2; // opcode + count
     constexpr size_t S_Batch_RemotePlayer_Update_PerPlayer = 9; // id(4) + x(2) + y(2) + facing
-    constexpr size_t S_Batch_Entity_Update_Header = 2;          // opcode + count
-    constexpr size_t S_Batch_Entity_Update_PerEntity = 9;       // id(4) + x(2) + y(2) + facing
+    constexpr size_t S_Batch_Entity_Update_Header = 2; // opcode + count
+    constexpr size_t S_Batch_Entity_Update_PerEntity = 9; // id(4) + x(2) + y(2) + facing
 
     // Combat
-    constexpr size_t S_Combat_Effect_Play = 8;                  // opcode + effectId(2) + x(2) + y(2) + param
-    constexpr size_t S_Combat_Damage = 11;                      // opcode + id(4) + damage(2) + hp(2) + maxHp(2)
-    constexpr size_t S_Combat_Heal = 11;                        // opcode + id(4) + amount(2) + hp(2) + maxHp(2)
-    constexpr size_t S_Combat_Skill_Cast = 12;                  // opcode + casterId(4) + skillId(2) + x(2) + y(2) + facing
-    constexpr size_t S_Combat_Buff_Applied = 9;                 // opcode + id(4) + buffId(2) + duration(2)
-    constexpr size_t S_Combat_Buff_Removed = 7;                 // opcode + id(4) + buffId(2)
-    constexpr size_t S_Combat_Miss = 10;                        // opcode + attackerId(4) + targetId(4) + missType
-    constexpr size_t S_Combat_Critical = 11;                    // opcode + attackerId(4) + targetId(4) + damage(2)
-    constexpr size_t C_Combat_Attack_Request = 1;               // opcode only
-    constexpr size_t C_Combat_Skill_Use_Request = 7;            // opcode + skillId(2) + x(2) + y(2)
-    constexpr size_t C_Combat_Target_Request = 5;               // opcode + entityId(4)
-    constexpr size_t C_Combat_Target_Clear_Request = 1;         // opcode only
+    constexpr size_t S_Combat_Effect_Play = 8; // opcode + effectId(2) + x(2) + y(2) + param
+    constexpr size_t S_Combat_Damage = 11; // opcode + id(4) + damage(2) + hp(2) + maxHp(2)
+    constexpr size_t S_Combat_Heal = 11; // opcode + id(4) + amount(2) + hp(2) + maxHp(2)
+    constexpr size_t S_Combat_Skill_Cast = 12; // opcode + casterId(4) + skillId(2) + x(2) + y(2) + facing
+    constexpr size_t S_Combat_Buff_Applied = 9; // opcode + id(4) + buffId(2) + duration(2)
+    constexpr size_t S_Combat_Buff_Removed = 7; // opcode + id(4) + buffId(2)
+    constexpr size_t S_Combat_Miss = 10; // opcode + attackerId(4) + targetId(4) + missType
+    constexpr size_t S_Combat_Critical = 11; // opcode + attackerId(4) + targetId(4) + damage(2)
+    constexpr size_t C_Combat_Attack_Request = 1; // opcode only
+    constexpr size_t C_Combat_Skill_Use_Request = 7; // opcode + skillId(2) + x(2) + y(2)
+    constexpr size_t C_Combat_Target_Request = 5; // opcode + entityId(4)
+    constexpr size_t C_Combat_Target_Clear_Request = 1; // opcode only
 
     // Chat
-    constexpr size_t C_Chat_Message_Send_Header = 4;            // opcode + channelId + msgLen(2)
-    constexpr size_t C_Chat_Emote_Send = 2;                     // opcode + emoteId
-    constexpr size_t S_Chat_Emote_Broadcast = 6;                // opcode + senderId(4) + emoteId
-    constexpr size_t S_Chat_System_Message_Header = 4;          // opcode + msgType + msgLen(2)
+    constexpr size_t C_Chat_Message_Send_Header = 4; // opcode + channelId + msgLen(2)
+    constexpr size_t C_Chat_Emote_Send = 2; // opcode + emoteId
+    constexpr size_t S_Chat_Emote_Broadcast = 6; // opcode + senderId(4) + emoteId
+    constexpr size_t S_Chat_System_Message_Header = 4; // opcode + msgType + msgLen(2)
 
     // Inventory
-    constexpr size_t C_Inventory_Item_Use_Request = 2;          // opcode + slot
-    constexpr size_t C_Inventory_Item_Drop_Request = 4;         // opcode + slot + quantity(2)
-    constexpr size_t C_Inventory_Item_Pickup_Request = 5;       // opcode + groundId(4)
-    constexpr size_t C_Inventory_Item_Move_Request = 3;         // opcode + fromSlot + toSlot
-    constexpr size_t S_Inventory_Slot_Update = 7;               // opcode + slot + itemId(2) + quantity(2) + flags
-    constexpr size_t S_Inventory_GroundItem_Spawned = 13;       // opcode + groundId(4) + itemId(2) + x(2) + y(2) + qty(2)
-    constexpr size_t S_Inventory_GroundItem_Removed = 5;        // opcode + groundId(4)
+    constexpr size_t C_Inventory_Item_Use_Request = 2; // opcode + slot
+    constexpr size_t C_Inventory_Item_Drop_Request = 4; // opcode + slot + quantity(2)
+    constexpr size_t C_Inventory_Item_Pickup_Request = 5; // opcode + groundId(4)
+    constexpr size_t C_Inventory_Item_Move_Request = 3; // opcode + fromSlot + toSlot
+    constexpr size_t S_Inventory_Slot_Update = 7; // opcode + slot + itemId(2) + quantity(2) + flags
+    constexpr size_t S_Inventory_GroundItem_Spawned = 13; // opcode + groundId(4) + itemId(2) + x(2) + y(2) + qty(2)
+    constexpr size_t S_Inventory_GroundItem_Removed = 5; // opcode + groundId(4)
 
     // System
-    constexpr size_t S_System_Kick_Notification_Header = 2;     // opcode + reasonLen
-    constexpr size_t S_System_Shutdown_Warning_Header = 4;      // opcode + seconds(2) + reasonLen
-    constexpr size_t S_System_Time_Sync = 5;                    // opcode + serverTime(4)
-
+    constexpr size_t S_System_Kick_Notification_Header = 2; // opcode + reasonLen
+    constexpr size_t S_System_Shutdown_Warning_Header = 4; // opcode + seconds(2) + reasonLen
+    constexpr size_t S_System_Time_Sync = 5; // opcode + serverTime(4)
 } // namespace Protocol::PayloadSize
 
 // ============================================================================
@@ -596,7 +596,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Server::Connection::S_Heartbeat_Response:
                 return "Connection::S_Heartbeat_Response";
 
-                // Movement
+            // Movement
             case Opcode::Movement::C_Move_Request:
                 return "Movement::C_Move_Request";
             case Opcode::Movement::C_Turn_Request:
@@ -606,7 +606,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Movement::C_Interact_Request:
                 return "Movement::C_Interact_Request";
 
-                // LocalPlayer
+            // LocalPlayer
             case Opcode::LocalPlayer::S_Welcome:
                 return "LocalPlayer::S_Welcome";
             case Opcode::LocalPlayer::S_Position_Correction:
@@ -628,7 +628,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::LocalPlayer::S_Warped:
                 return "LocalPlayer::S_Warped";
 
-                // Map
+            // Map
             case Opcode::Map::S_Tile_Data:
                 return "Map::S_Tile_Data";
             case Opcode::Map::S_Tile_Update:
@@ -640,7 +640,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Map::S_Collision_Data:
                 return "Map::S_Collision_Data";
 
-                // RemotePlayer
+            // RemotePlayer
             case Opcode::RemotePlayer::S_Entered_Range:
                 return "RemotePlayer::S_Entered_Range";
             case Opcode::RemotePlayer::S_Left_Range:
@@ -656,7 +656,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::RemotePlayer::S_Left_Game:
                 return "RemotePlayer::S_Left_Game";
 
-                // Entity
+            // Entity
             case Opcode::Entity::S_Entered_Range:
                 return "Entity::S_Entered_Range";
             case Opcode::Entity::S_Left_Range:
@@ -672,13 +672,13 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Entity::S_Respawned:
                 return "Entity::S_Respawned";
 
-                // Batch
+            // Batch
             case Opcode::Batch::S_RemotePlayer_Update:
                 return "Batch::S_RemotePlayer_Update";
             case Opcode::Batch::S_Entity_Update:
                 return "Batch::S_Entity_Update";
 
-                // Combat
+            // Combat
             case Opcode::Combat::S_Effect_Play:
                 return "Combat::S_Effect_Play";
             case Opcode::Combat::S_Damage:
@@ -704,7 +704,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Combat::C_Target_Clear_Request:
                 return "Combat::C_Target_Clear_Request";
 
-                // Chat
+            // Chat
             case Opcode::Chat::C_Message_Send:
                 return "Chat::C_Message_Send";
             case Opcode::Chat::C_Emote_Send:
@@ -722,7 +722,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Chat::S_System_Message:
                 return "Chat::S_System_Message";
 
-                // Inventory
+            // Inventory
             case Opcode::Inventory::C_Item_Use_Request:
                 return "Inventory::C_Item_Use_Request";
             case Opcode::Inventory::C_Item_Drop_Request:
@@ -740,7 +740,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Inventory::S_GroundItem_Removed:
                 return "Inventory::S_GroundItem_Removed";
 
-                // Debug
+            // Debug
             case Opcode::Debug::S_Custom_Response:
                 return "Debug::S_Custom_Response";
             case Opcode::Debug::C_Request_State:
@@ -748,7 +748,7 @@ namespace Protocol::OpcodeUtil {
             case Opcode::Debug::S_State_Response:
                 return "Debug::S_State_Response";
 
-                // System
+            // System
             case Opcode::System::S_Kick_Notification:
                 return "System::S_Kick_Notification";
             case Opcode::System::S_Shutdown_Warning:
@@ -795,5 +795,4 @@ namespace Protocol::OpcodeUtil {
         if (opcode >= 0xF0 && opcode <= 0xFF) return "System/Connection";
         return "Unknown";
     }
-
 }

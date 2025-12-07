@@ -127,7 +127,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 4)) return;
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            uint playerId = PacketReader.ReadU64(payload, ref offset);
 
             Debug.Log($"PacketHandler: Assigning player ID {playerId}");
 

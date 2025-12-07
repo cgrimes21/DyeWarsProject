@@ -45,6 +45,24 @@ namespace DyeWars.Network.Protocol
         }
 
         /// <summary>
+        /// Read eight bytes as big-endian uint64 and advance offset by 8.
+        /// </summary>
+        public static ulong ReadU64(byte[] data, ref int offset)
+        {
+            ulong value =
+                ((ulong)data[offset] << 56) |
+                ((ulong)data[offset + 1] << 48) |
+                ((ulong)data[offset + 2] << 40) |
+                ((ulong)data[offset + 3] << 32) |
+                ((ulong)data[offset + 4] << 24) |
+                ((ulong)data[offset + 5] << 16) |
+                ((ulong)data[offset + 6] << 8) |
+                ((ulong)data[offset + 7]);
+            offset += 8;
+            return value;
+        }
+
+        /// <summary>
         /// Read a signed 16-bit integer (big-endian) and advance offset by 2.
         /// </summary>
         public static short ReadS16(byte[] data, ref int offset)

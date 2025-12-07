@@ -11,14 +11,14 @@
 
 
 GameServer::GameServer(asio::io_context &io_context)
-        : io_context_(io_context),
-          acceptor_(
-                  io_context,
-                  asio::ip::tcp::endpoint(
-                          asio::ip::address::from_string(Protocol::ADDRESS),
-                          Protocol::PORT)),
-          world_(256, 256),
-          lua_engine_(std::make_shared<LuaGameEngine>()) {
+    : io_context_(io_context),
+      acceptor_(
+          io_context,
+          asio::ip::tcp::endpoint(
+              asio::ip::address::from_string(Protocol::ADDRESS),
+              Protocol::PORT)),
+      world_(256, 256),
+      lua_engine_(std::make_shared<LuaGameEngine>()) {
     Log::Info("Server starting on port {}...", Protocol::PORT);
     StartAccept();
     game_loop_thread_ = std::thread(&GameServer::GameLogicThread, this);
@@ -67,54 +67,53 @@ void GameServer::ReloadScripts() const {
 
 void GameServer::StartAccept() {
     acceptor_.async_accept([this](
-            const std::error_code ec,
-            asio::ip::tcp::socket socket) {
-        if (!ec && server_running_) {
-            // If we fail getting ip, close socket and listen for next connection
-            std::string ip;
-            try {
-                ip = socket.remote_endpoint().address().to_string();
-            }
-            catch (...) {
-                socket.close();
-                if (server_running_) StartAccept();
-                return;
-            }
-            Log::Info("IP: {} trying to connect.", ip);
+    const std::error_code ec,
+    asio::ip::tcp::socket socket) {
+            if (!ec && server_running_) {
+                // If we fail getting ip, close socket and listen for next connection
+                std::string ip;
+                try {
+                    ip = socket.remote_endpoint().address().to_string();
+                } catch (...) {
+                    socket.close();
+                    if (server_running_) StartAccept();
+                    return;
+                }
+                Log::Info("IP: {} trying to connect.", ip);
 
-            if (limiter_.IsBanned(ip)) {
-                Log::Trace("Rejected banned IP: {}", ip);
-                socket.close();
-            } else if (!limiter_.CheckRateLimit(ip)) {
-                Log::Trace("Rate limited IP: {}", ip);
-                socket.close();
-            } else if (!limiter_.CanConnect(ip)) {
-                Log::Trace("Connection limit reached for IP: {}", ip);
-                socket.close();
-            } else {
-                limiter_.AddConnection(ip);
+                if (limiter_.IsBanned(ip)) {
+                    Log::Trace("Rejected banned IP: {}", ip);
+                    socket.close();
+                } else if (!limiter_.CheckRateLimit(ip)) {
+                    Log::Trace("Rate limited IP: {}", ip);
+                    socket.close();
+                } else if (!limiter_.CanConnect(ip)) {
+                    Log::Trace("Connection limit reached for IP: {}", ip);
+                    socket.close();
+                } else {
+                    limiter_.AddConnection(ip);
 
-                uint64_t client_id = next_client_id_++;
+                    uint64_t client_id = next_client_id_++;
 
-                const auto client = std::make_shared<ClientConnection>(
+                    const auto client = std::make_shared<ClientConnection>(
                         std::move(socket),
                         this,
                         client_id);
 
-                // Start the session's async read chain and handshake timer.
-                // The session keeps itself alive via shared_from_this() in its async callbacks.
-                // If the handshake fails or times out, the session will clean itself up.
-                client->Start();
+                    // Start the session's async read chain and handshake timer.
+                    // The session keeps itself alive via shared_from_this() in its async callbacks.
+                    // If the handshake fails or times out, the session will clean itself up.
+                    client->Start();
+                }
+            } else if (ec && server_running_) {
+                // Only log if it's not a shutdown
+                Log::Error("Accept failed: {}", ec.message());
             }
-        } else if (ec && server_running_) {
-            // Only log if it's not a shutdown
-            Log::Error("Accept failed: {}", ec.message());
-        }
-        // Only restart if still running
-        if (server_running_) {
-            StartAccept();
-        }
-    });
+            // Only restart if still running
+            if (server_running_) {
+                StartAccept();
+            }
+        });
 }
 
 /// ============================================================================
@@ -129,8 +128,7 @@ void GameServer::QueueAction(std::function<void()> action) {
 }
 
 void GameServer::ProcessActionQueue() {
-    std::queue<std::function<void()>> to_process;
-    {
+    std::queue<std::function<void()> > to_process; {
         std::lock_guard<std::mutex> lock(action_mutex_);
         std::swap(to_process, action_queue_);
     }
@@ -173,7 +171,8 @@ void GameServer::GameLogicThread() {
         total_ms += ms;
         tick_count++;
 
-        if (tick_count >= 100) {  // every 5 sec at 20 TPS
+        if (tick_count >= 100) {
+            // every 5 sec at 20 TPS
             Log::Trace("Avg tick: {:.3f}ms", total_ms / tick_count);
             total_ms = 0;
             tick_count = 0;
@@ -206,10 +205,10 @@ void GameServer::ProcessTick() {
     if (lua_engine_) {
         for (const auto &player: dirty_players) {
             lua_engine_->OnPlayerMoved(
-                    player->GetID(),
-                    player->GetX(),
-                    player->GetY(),
-                    player->GetFacing());
+                player->GetID(),
+                player->GetX(),
+                player->GetY(),
+                player->GetFacing());
         }
     }
 }
@@ -320,9 +319,9 @@ void GameServer::ProcessTick() {
 /// Build one batched packet per viewer containing all visible updates.
 /// ============================================================================
 
-void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>> &dirty_players) {
+void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player> > &dirty_players) {
     // Map: viewer_id -> list of dirty players they can see
-    std::unordered_map<uint64_t, std::vector<std::shared_ptr<Player>>> viewer_updates;
+    std::unordered_map<uint64_t, std::vector<std::shared_ptr<Player> > > viewer_updates;
 
     // For each dirty player, find viewers using spatial hash
     for (const auto &dirty_player: dirty_players) {
@@ -358,7 +357,7 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         Protocol::Packet batch;
         Protocol::PacketWriter::WriteByte(batch.payload,
                                           Protocol::Opcode::Batch::S_RemotePlayer_Update);
-        Protocol::PacketWriter::WriteByte(batch.payload, 0);  // Placeholder for count
+        Protocol::PacketWriter::WriteByte(batch.payload, 0); // Placeholder for count
 
         uint8_t count = 0;
         for (const auto &player: updates) {
@@ -378,7 +377,7 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         batch.size = static_cast<uint16_t>(batch.payload.size());
 
         // Send
-        auto data = std::make_shared<std::vector<uint8_t>>(batch.ToBytes());
+        auto data = std::make_shared<std::vector<uint8_t> >(batch.ToBytes());
         conn->RawSend(data);
     }
 }
@@ -395,10 +394,10 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
 
         // Add to world's spatial hash
         world_.AddPlayer(
-                player->GetID(),
-                player->GetX(),
-                player->GetY(),
-                player);
+            player->GetID(),
+            player->GetX(),
+            player->GetY(),
+            player);
 
         Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
 
@@ -407,8 +406,8 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
 
         // Send nearby players to this client (not all players)
         auto nearby_players = world_.GetPlayersInRange(
-                player->GetX(),
-                player->GetY()
+            player->GetX(),
+            player->GetY()
         );
         for (const auto &other: nearby_players) {
             if (other->GetID() == player->GetID()) continue;
@@ -429,11 +428,11 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
             if (!viewer_conn) continue;
 
             Packets::PacketSender::PlayerJoined(
-                    viewer_conn,
-                    player->GetID(),
-                    player->GetX(),
-                    player->GetY(),
-                    player->GetFacing()
+                viewer_conn,
+                player->GetID(),
+                player->GetX(),
+                player->GetY(),
+                player->GetFacing()
             );
         }
     });
@@ -441,20 +440,34 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
 
 void GameServer::OnClientDisconnect(uint64_t client_id, const std::string &ip) {
     QueueAction([this, client_id, ip] {
-        // Get player ID before removal
-        uint64_t player_id = players_.GetPlayerIDForClient(client_id);
+        auto player = players_.GetByClientID(client_id);
+        if (player) {
+            // Get player ID before removal
+            uint64_t player_id = players_.GetPlayerIDForClient(client_id);
+            int16_t px = player->GetX();
+            int16_t py = player->GetY();
 
-        if (player_id != 0) {
+            // Get nearby viewers BEFORE removing from spatial hash
+            auto nearby_viewers = world_.GetPlayersInRange(px, py);
+
             // Remove from World's spatial hash
             world_.RemovePlayer(player_id);
 
             // Remove from registry
             players_.RemoveByClientID(client_id);
 
-            // Broadcast player left to everyone
-            clients_.BroadcastToAll([player_id](const std::shared_ptr<ClientConnection> &conn) {
-                Packets::PacketSender::PlayerLeft(conn, player_id);
-            });
+            // Notify only nearby players
+            for (const auto &viewer: nearby_viewers) {
+                {
+                    if (viewer->GetID() == player_id) continue;
+
+                    auto viewer_conn = clients_.GetClientCopy(viewer->GetClientID());
+                    if (!viewer_conn) continue;
+
+                    Packets::PacketSender::PlayerLeft(viewer_conn, player_id);
+                }
+                Log::Info("Player {} disconnected", player_id);
+            }
         }
 
         // Remove from client manager
