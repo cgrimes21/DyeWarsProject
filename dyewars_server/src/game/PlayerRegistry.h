@@ -1,78 +1,267 @@
 /// =======================================
+/// DyeWarsServer - PlayerRegistry
+///
+/// Manages player lifecycle, lookups, and dirty tracking.
+/// Does NOT own spatial data (World does).
+///
 /// Created by Anonymous on Dec 05, 2025
 /// =======================================
-//
 #pragma once
 
 #include <memory>
-#include <queue>
-#include <variant>
 #include <unordered_map>
-#include <random>
-#include "Player.h"
-#include "game/actions/Actions.h"
-#include "server/ClientManager.h"
 #include <unordered_set>
+#include <random>
+#include <cassert>
+#include <mutex>
+#include <functional>
+#include "core/Log.h"
+#include "Player.h"
+/// ============================================================================
+/// PLAYER REGISTRY
+///
+/// Responsibilities:
+/// - Player lifecycle (create, remove)
+/// - Client ID <-> Player ID mapping
+/// - Dirty tracking (who needs broadcast)
+/// - Thread-safe access to player data
+///
+/// Does NOT own:
+/// - Spatial data (World does)
+/// - Networking (ClientManager does)
+/// - Action processing (GameServer does)
+/// ============================================================================
 
 // TODO Move this to? tilemap?
 enum class SpawnPoints : uint32_t {
     mainArea = 0x00050005,
 };
 
-class TileMap;
-
 class PlayerRegistry {
 public:
+    /// ========================================================================
+    /// PLAYER LIFECYCLE
+    /// ========================================================================
+
+    /// Create a new player for a client connection
+    /// Returns the created player (never null)
+    std::shared_ptr<Player> CreatePlayer(uint64_t client_id) {
+        uint64_t player_id = GenerateUniqueID();
+        assert(player_id != 0 && "Failed to generate unique player ID");
+        auto player = std::make_shared<Player>(player_id, 0, 0);
+        player->SetClientID(client_id);
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            players_[player_id] = player;
+            client_to_player_[client_id] = player_id;
+        }
+
+        Log::Trace("Player {} created for client {}", player_id, client_id);
+        return player;
+    }
+
+    void RemovePlayer(uint64_t player_id) {
+
+        {// Find and remove client mapping
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (auto it = client_to_player_.begin(); it != client_to_player_.end(); it++) {
+                if (it->second == player_id) {
+                    client_to_player_.erase(it);
+                    break;
+                }
+            }
+
+            // Remove from dirty set if present
+            auto player_it = players_.find(player_id);
+            if (player_it != players_.end()) {
+                dirty_players_.erase(player_it->second);
+                players_.erase(player_it);
+            }
+        }
+        Log::Info("Player {} removed", player_id);
+    }
+
+    /// Remove a player by client ID
+    void RemoveByClientID(uint64_t client_id) {
+        {
+
+            std::lock_guard<std::mutex> lock(mutex_);
+
+            auto it = client_to_player_.find(client_id);
+            if (it != client_to_player_.end()) {
+                uint64_t player_id = it->second;
+
+                // Remove from dirty set if present
+                auto player_it = players_.find(player_id);
+                if (player_it != players_.end()) {
+                    dirty_players_.erase(player_it->second);
+                    players_.erase(player_it);
+                }
+
+                client_to_player_.erase(it);
+                Log::Info("Player {} removed (by client {})", player_id, client_id);
+            }
+        }
+    }
+
     // Lifecycle
     void Login(uint64_t client_id);
 
     void Logout();
 
-    std::shared_ptr<Player> CreatePlayer(uint64_t client_id);
 
-    void RemovePlayer(uint64_t player_id);
+    /// ========================================================================
+    /// PLAYER LOOKUP
+    /// ========================================================================
 
-    void RemoveByClientID(uint64_t client_id);
+    /// Get player by player ID
+    std::shared_ptr<Player> GetByID(uint64_t player_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = players_.find(player_id);
+        return (it != players_.end()) ? it->second : nullptr;
+    }
 
-    // Lookups
-    std::shared_ptr<Player> GetByID(uint64_t player_id);
+    /// Get player by client ID
+    std::shared_ptr<Player> GetByClientID(uint64_t client_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    std::shared_ptr<Player> GetByClientID(uint64_t client_id);
+        auto it = client_to_player_.find(client_id);
+        if (it == client_to_player_.end()) return nullptr;
 
-    uint64_t GetPlayerIDForClient(uint64_t client_id);
+        auto pit = players_.find(it->second);
+        return (pit != players_.end()) ? pit->second : nullptr;
+    }
 
-    // Command queue (called from packet handlers on io thread)
-    //void QueueAction(const Actions::Action &action, uint64_t client_id);
+    /// Get player ID for a client connection
+    /// Returns 0 if not found
+    uint64_t GetPlayerIDForClient(uint64_t client_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = client_to_player_.find(client_id);
+        return (it != client_to_player_.end()) ? it->second : 0;
+    }
 
-    void MarkDirty(const std::shared_ptr<Player> &player);
+    /// ========================================================================
+    /// DIRTY TRACKING
+    /// ========================================================================
 
-    std::vector<std::shared_ptr<Player>> ConsumeDirtyPlayers();
+    /// Mark a player as dirty (needs broadcast)
+    /// Thread-safe - can be called from game thread
+    void MarkDirty(const std::shared_ptr<Player> &player) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dirty_players_.insert(player);
+    }
 
-    // Queries
-    std::vector<std::shared_ptr<Player>> GetAllPlayers();
+    /// Mark a player as dirty by ID
+    void MarkDirty(uint64_t player_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = players_.find(player_id);
+        if (it != players_.end()) {
+            dirty_players_.insert(it->second);
+        }
+    }
 
-    std::vector<std::shared_ptr<Player>> GetDirtyPlayers();
 
-    size_t Count();
+    std::vector<std::shared_ptr<Player>> ConsumeDirtyPlayers() {
+        std::vector<std::shared_ptr<Player>> result(dirty_players_.begin(), dirty_players_.end());
+        dirty_players_.clear();
+        return result;
+    }
 
-    // Move timings + network grace
-    static constexpr auto MOVE_COOLDOWN = std::chrono::milliseconds(330);  // 350ms - 20ms grace
-    static constexpr auto TURN_COOLDOWN = std::chrono::milliseconds(200);  // 220ms - 20ms grace
-    static constexpr auto NETWORK_GRACE = std::chrono::milliseconds(20);
+    /// Check if there are dirty players
+    bool HasDirtyPlayers() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return !dirty_players_.empty();
+    }
+
+    /// ========================================================================
+    /// QUERIES
+    /// ========================================================================
+
+    /// Get all players (copy of shared_ptrs)
+    std::vector<std::shared_ptr<Player>> GetAllPlayers() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::vector<std::shared_ptr<Player>> result;
+        result.reserve(players_.size());
+        for (const auto &[id, player]: players_) {
+            result.push_back(player);
+        }
+        return result;
+    }
+
+    /// Get player count
+    size_t Count() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return players_.size();
+    }
+
+    /// ========================================================================
+    /// ITERATION (for broadcasting)
+    /// ========================================================================
+
+    /// Iterate over all players
+    /// Note: Holds lock during iteration - keep callback fast!
+    void ForEachPlayer(const std::function<void(const std::shared_ptr<Player> &)> &func) {
+        std::vector<std::shared_ptr<Player>> snapshot;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            snapshot.reserve(players_.size());
+            for (const auto &[id, player]: players_) {
+                snapshot.push_back(player);
+            }
+        } // Lock released
+        for (const auto &player: snapshot) {
+            func(player);
+        }
+    }
 
 private:
-    uint64_t GenerateUniqueID();
+    /// ========================================================================
+    /// INTERNAL
+    /// ========================================================================
 
-    //std::queue<Actions::Action> action_queue_;
+    /// Generate a unique player ID
+    uint64_t GenerateUniqueID() {
+        std::lock_guard<std::mutex> lock(mutex_);
 
+        for (int attempts = 0; attempts < 100; attempts++) {
+            uint64_t id = id_dist_(rng_);
+            if (!players_.contains(id)) {
+                return id;
+            }
+        }
+
+
+        // Fallback: find next available sequential ID
+        for (int attempts = 0; attempts < 100; attempts++) {
+            uint64_t id = next_fallback_id_++;
+            if (!players_.contains(id)) {
+                return id;
+            }
+        }
+        assert(false && "Failed to generate Player ID");
+        return 0;
+    }
+
+    // ========================================================================
+    /// DATA
+    /// ========================================================================
+
+    /// Player storage: player_id -> Player
     std::unordered_map<uint64_t, std::shared_ptr<Player>> players_;
-    std::unordered_set<std::shared_ptr<Player>> dirty_players_;
+
+    /// Client mapping: client_id -> player_id
     std::unordered_map<uint32_t, uint32_t> client_to_player_;
+
+    /// Dirty players: need broadcast this tick
+    std::unordered_set<std::shared_ptr<Player>> dirty_players_;
+
+    /// Thread safety
     std::mutex mutex_;
 
-    std::atomic<bool> is_dirty_{false};
-
-    std::mt19937 rng_{std::random_device{}()};
-    std::uniform_int_distribution<uint32_t> id_dist_{1, UINT32_MAX};
-
+    /// ID generation
+    std::mt19937_64 rng_{std::random_device{}()};
+    std::uniform_int_distribution<uint64_t> id_dist_{1, UINT64_MAX - 1};
+    uint64_t next_fallback_id_{1};
 };
+

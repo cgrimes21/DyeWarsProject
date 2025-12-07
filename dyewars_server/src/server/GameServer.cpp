@@ -12,11 +12,12 @@
 
 GameServer::GameServer(asio::io_context &io_context)
         : io_context_(io_context),
-          acceptor_(io_context,
-                    asio::ip::tcp::endpoint(
-                            asio::ip::address::from_string(Protocol::ADDRESS),
-                            Protocol::PORT)),
-          world_(10, 10),
+          acceptor_(
+                  io_context,
+                  asio::ip::tcp::endpoint(
+                          asio::ip::address::from_string(Protocol::ADDRESS),
+                          Protocol::PORT)),
+          world_(256, 256),
           lua_engine_(std::make_shared<LuaGameEngine>()) {
     Log::Info("Server starting on port {}...", Protocol::PORT);
     StartAccept();
@@ -26,6 +27,10 @@ GameServer::GameServer(asio::io_context &io_context)
 GameServer::~GameServer() {
     Shutdown();
 }
+
+/// ============================================================================
+/// SERVER CONTROL
+/// ============================================================================
 
 void GameServer::Shutdown() {
     if (shutdown_requested_.exchange(true)) return;
@@ -55,6 +60,10 @@ void GameServer::ReloadScripts() const {
         lua_engine_->ReloadScripts();
     }
 }
+
+/// ============================================================================
+/// NETWORKING
+/// ============================================================================
 
 void GameServer::StartAccept() {
     acceptor_.async_accept([this](
@@ -108,6 +117,33 @@ void GameServer::StartAccept() {
     });
 }
 
+/// ============================================================================
+/// ACTION QUEUE
+/// ============================================================================
+
+void GameServer::QueueAction(std::function<void()> action) {
+    {
+        std::lock_guard<std::mutex> lock(action_mutex_);
+        action_queue_.push(std::move(action));
+    }
+}
+
+void GameServer::ProcessActionQueue() {
+    std::queue<std::function<void()>> to_process;
+    {
+        std::lock_guard<std::mutex> lock(action_mutex_);
+        std::swap(to_process, action_queue_);
+    }
+    while (!to_process.empty()) {
+        to_process.front()();
+        to_process.pop();
+    }
+}
+
+/// ============================================================================
+/// GAME LOOP
+/// ============================================================================
+
 void GameServer::GameLogicThread() {
     constexpr int TICKS_PER_SECOND = 20;
     constexpr std::chrono::milliseconds TICK_RATE(1000 / TICKS_PER_SECOND); // 50ms
@@ -121,14 +157,16 @@ void GameServer::GameLogicThread() {
     while (server_running_) {
         auto start_time = std::chrono::steady_clock::now();
 
-        // 1. Process Logic
+        // 1. Process queued actions from network thread
+        ProcessActionQueue();
+
+        // 2. Process game tick (movement, broadcasting, etc.)
         ProcessTick();
+
+        // 3. Update bandwidth monitor
         BandwidthMonitor::Instance().Tick();
 
-        // 2. Sleep until next tick
-        //auto end_time = std::chrono::steady_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
+        // 4. Track performance
         auto elapsed = std::chrono::steady_clock::now() - start_time;
         auto ms = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count() / 1000.0;
 
@@ -136,14 +174,16 @@ void GameServer::GameLogicThread() {
         tick_count++;
 
         if (tick_count >= 100) {  // every 5 sec at 20 TPS
-            Log::Trace("Avg tick: {:.2f}ms", total_ms / tick_count);
+            Log::Trace("Avg tick: {:.3f}ms", total_ms / tick_count);
             total_ms = 0;
             tick_count = 0;
         }
 
         if (ms > 40.0) {
-            Log::Warn("Slow tick: {:.2f}ms", ms);
+            Log::Warn("Slow tick: {:.3f}ms / {}", ms, TICK_RATE);
         }
+
+        // 5. Sleep until next tick
         if (elapsed < TICK_RATE) {
             std::this_thread::sleep_for(TICK_RATE - elapsed);
         }
@@ -151,15 +191,30 @@ void GameServer::GameLogicThread() {
     Log::Info("Game Loop Ended.");
 }
 
-// TODO Overhaul
-void GameServer::ProcessTick() {
-    // Process all queued commands from network thread
-    ProcessActionQueue();
+/// ============================================================================
+/// PROCESS TICK - View-Based Broadcasting
+/// ============================================================================
 
+void GameServer::ProcessTick() {
+    // Get players that changed this tick
     auto dirty_players = players_.ConsumeDirtyPlayers();
     if (dirty_players.empty()) return;
 
-    // TODO: Implement view-based broadcasting
+    BroadcastDirtyPlayers(dirty_players);
+
+    // Call Lua hooks
+    if (lua_engine_) {
+        for (const auto &player: dirty_players) {
+            lua_engine_->OnPlayerMoved(
+                    player->GetID(),
+                    player->GetX(),
+                    player->GetY(),
+                    player->GetFacing());
+        }
+    }
+}
+
+/*
     // Broadcast updates to all clients
     for (const auto &player: dirty_players) {
         uint64_t player_id = player->GetID();
@@ -167,7 +222,7 @@ void GameServer::ProcessTick() {
         int16_t y = player->GetY();
         uint8_t facing = player->GetFacing();
 
-        /* I want to send a batch update here similar to the commented out code below
+        * I want to send a batch update here similar to the commented out code below
          * thing is, anything about the player could have changed. do I send one large batch or
          * movement batch
          * status batch
@@ -177,7 +232,7 @@ void GameServer::ProcessTick() {
          *
         clients_.BroadcastToAll([=](const auto& conn) {
             Packets::Send::PlayerUpdate(conn, player_id, x, y, facing);
-        });*/
+        });
     }
 
 
@@ -186,13 +241,13 @@ void GameServer::ProcessTick() {
     //const auto count = static_cast<uint8_t>(dirty_players.size());
     Protocol::Packet batch;
     Protocol::PacketWriter::WriteByte(batch.payload,
-        Protocol::Opcode::Batch::S_RemotePlayer_Update); // should be 20 for client
+                                      Protocol::Opcode::Batch::S_RemotePlayer_Update); // should be 20 for client
     // We can fit about 200 player updates in a standard 1400 byte MTU packet.
     // If you have more, you'd loop this, but for now let's assume < 200 moves/tick.
     //Protocol::PacketWriter::WriteByte(batch.payload, count);
 
     uint8_t processed = 0;
-    for (const auto& player : dirty_players) {
+    for (const auto &player: dirty_players) {
         Protocol::PacketWriter::WriteUInt64(batch.payload, player->GetID());
         Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetX()));
         Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetY()));
@@ -214,18 +269,9 @@ void GameServer::ProcessTick() {
 
 
 
-    // Call Lua hooks
-    if (lua_engine_) {
-        for (const auto &player: dirty_players) {
-            lua_engine_->OnPlayerMoved(
-                    player->GetID(),
-                    player->GetX(),
-                    player->GetY(),
-                    player->GetFacing());
-        }
-    }
 
-    /* Packet Batch Example:
+
+    * Packet Batch Example:
 
     // TODO: this takes every moving players data, builds one packet, and sends it to every connected player
     // Extremely unnecessary, just a good example of packet coalescing.
@@ -264,25 +310,76 @@ void GameServer::ProcessTick() {
         // is actually good for sync correction (anti-cheat).
         session->RawSend(encoded_bytes);
     }
-     */
-}
+     *
+}*/
 
-void GameServer::ProcessActionQueue() {
-    std::queue<std::function<void()>> to_process;
-    {
-        std::lock_guard<std::mutex> lock(action_mutex_);
-        std::swap(to_process, action_queue_);
-    }
-    while (!to_process.empty()) {
-        to_process.front()();
-        to_process.pop();
-    }
-}
+/// ============================================================================
+/// VIEW-BASED BROADCASTING
+///
+/// For each dirty player, find viewers who can see them using spatial hash.
+/// Build one batched packet per viewer containing all visible updates.
+/// ============================================================================
 
-void GameServer::QueueAction(std::function<void()> action) {
-    {
-        std::lock_guard<std::mutex> lock(action_mutex_);
-        action_queue_.push(std::move(action));
+void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>> &dirty_players) {
+    // Map: viewer_id -> list of dirty players they can see
+    std::unordered_map<uint64_t, std::vector<std::shared_ptr<Player>>> viewer_updates;
+
+    // For each dirty player, find viewers using spatial hash
+    for (const auto &dirty_player: dirty_players) {
+        int16_t px = dirty_player->GetX();
+        int16_t py = dirty_player->GetY();
+        uint64_t dirty_id = dirty_player->GetID();
+
+        // Use World's spatial hash to find nearby players
+        // This is O(K) where K = players in nearby cells, NOT O(N)!
+        auto nearby_viewers = world_.GetPlayersInRange(px, py);
+
+        for (const auto &viewer: nearby_viewers) {
+            // Skip self - don't send player their own movement
+            if (viewer->GetID() == dirty_id) continue;
+
+            // World already did exact distance check in GetPlayersInRange
+            viewer_updates[viewer->GetID()].push_back(dirty_player);
+        }
+    }
+
+    // Send batched packets to each viewer
+    for (auto &[viewer_id, updates]: viewer_updates) {
+        if (updates.empty()) continue;
+
+        // Get viewer's player and connection
+        auto viewer = players_.GetByID(viewer_id);
+        if (!viewer) continue;
+
+        auto conn = clients_.GetClientCopy(viewer->GetClientID());
+        if (!conn) continue;
+
+        // Build batch packet
+        Protocol::Packet batch;
+        Protocol::PacketWriter::WriteByte(batch.payload,
+                                          Protocol::Opcode::Batch::S_RemotePlayer_Update);
+        Protocol::PacketWriter::WriteByte(batch.payload, 0);  // Placeholder for count
+
+        uint8_t count = 0;
+        for (const auto &player: updates) {
+            // Player update: ID (8) + X (2) + Y (2) + Facing (1) = 13 bytes
+            Protocol::PacketWriter::WriteUInt64(batch.payload, player->GetID());
+            Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetX()));
+            Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetY()));
+            Protocol::PacketWriter::WriteByte(batch.payload, player->GetFacing());
+            count++;
+
+            // Safety: max 255 per packet
+            if (count == 255) break;
+        }
+
+        // Patch in count
+        batch.payload[1] = count;
+        batch.size = static_cast<uint16_t>(batch.payload.size());
+
+        // Send
+        auto data = std::make_shared<std::vector<uint8_t>>(batch.ToBytes());
+        conn->RawSend(data);
     }
 }
 
@@ -296,14 +393,24 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
         // Create player in registry
         auto player = players_.CreatePlayer(client->GetClientID());
 
+        // Add to world's spatial hash
+        world_.AddPlayer(
+                player->GetID(),
+                player->GetX(),
+                player->GetY(),
+                player);
+
         Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
 
         // Send welcome packet to this client
         Packets::PacketSender::Welcome(client, player);
 
-        // Send existing players to this client
-        auto all_players = players_.GetAllPlayers();
-        for (const auto &other: all_players) {
+        // Send nearby players to this client (not all players)
+        auto nearby_players = world_.GetPlayersInRange(
+                player->GetX(),
+                player->GetY()
+        );
+        for (const auto &other: nearby_players) {
             if (other->GetID() == player->GetID()) continue;
 
             Packets::PacketSender::PlayerJoined(client,
@@ -312,16 +419,51 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
                                                 other->GetY(),
                                                 other->GetFacing());
         }
-        // Broadcast this player joined to everyone else
-        clients_.BroadcastToOthers(
-                client->GetClientID(),
-                [&](const std::shared_ptr<ClientConnection> &conn) {
-                    Packets::PacketSender::PlayerJoined(conn,
-                                                        player->GetID(),
-                                                        player->GetX(),
-                                                        player->GetY(),
-                                                        player->GetFacing());
-                });
-    });
 
+
+        // Broadcast this player joined to nearby players
+        for (const auto &viewer: nearby_players) {
+            if (viewer->GetID() == player->GetID()) continue;
+
+            auto viewer_conn = clients_.GetClientCopy(viewer->GetClientID());
+            if (!viewer_conn) continue;
+
+            Packets::PacketSender::PlayerJoined(
+                    viewer_conn,
+                    player->GetID(),
+                    player->GetX(),
+                    player->GetY(),
+                    player->GetFacing()
+            );
+        }
+    });
 }
+
+void GameServer::OnClientDisconnect(uint64_t client_id, const std::string &ip) {
+    QueueAction([this, client_id, ip] {
+        // Get player ID before removal
+        uint64_t player_id = players_.GetPlayerIDForClient(client_id);
+
+        if (player_id != 0) {
+            // Remove from World's spatial hash
+            world_.RemovePlayer(player_id);
+
+            // Remove from registry
+            players_.RemoveByClientID(client_id);
+
+            // Broadcast player left to everyone
+            clients_.BroadcastToAll([player_id](const std::shared_ptr<ClientConnection> &conn) {
+                Packets::PacketSender::PlayerLeft(conn, player_id);
+            });
+        }
+
+        // Remove from client manager
+        clients_.RemoveClient(client_id);
+
+        // Update rate limiter
+        limiter_.RemoveConnection(ip);
+
+        Log::Info("Client {} disconnected", client_id);
+    });
+}
+

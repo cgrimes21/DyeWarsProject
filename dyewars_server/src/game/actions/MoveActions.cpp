@@ -1,10 +1,4 @@
-/// =======================================
-/// Created by Anonymous on Dec 05, 2025
-/// =======================================
-//
 #include "Actions.h"
-#include "core/Common.h"
-#include "game/PlayerRegistry.h"
 #include "server/GameServer.h"
 
 namespace Actions::Movement {
@@ -13,11 +7,13 @@ namespace Actions::Movement {
             auto player = server->Players().GetByClientID(client_id);
             if (!player) return;
 
-            if (player->AttemptMove(direction, facing, server->GetWorld().GetMap())) {
-                //player->SetDirty(true);
-                // Instead of marking the player itself, we tell the system responsible for movements
-                // that this player is dirty. that way we know what packets we need to broadcast
-                // (batch player position update)
+            auto result = player->AttemptMove(direction, facing, server->GetWorld().GetMap());
+
+            if (result == MoveResult::Success) {
+                server->GetWorld().UpdatePlayerPosition(
+                        player->GetID(),
+                        player->GetX(),
+                        player->GetY());
                 server->Players().MarkDirty(player);
             }
         });
@@ -29,7 +25,7 @@ namespace Actions::Movement {
             if (!player) return;
 
             player->SetFacing(facing);
-            player->SetDirty(true);
+            server->Players().MarkDirty(player);
         });
     }
 }
