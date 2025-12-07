@@ -7,8 +7,8 @@
 #include "game/PlayerRegistry.h"
 
 namespace Actions::Movement {
-    std::shared_ptr<Player> MoveCommand::Execute(GameContext &ctx) const {
-        auto player = ctx.players.GetByID(player_id);
+    std::shared_ptr<Player> MoveCommand::Execute(const GameContext &ctx) const {
+        auto player = ctx.players.GetByClientID(client_id);
         if (!player) return nullptr;
 
         // AttemptMove now handles cooldown + facing validation internally
@@ -19,8 +19,8 @@ namespace Actions::Movement {
         return nullptr;
     }
 
-    std::shared_ptr<Player> TurnCommand::Execute(GameContext &ctx) const {
-        auto player = ctx.players.GetByID(player_id);
+    std::shared_ptr<Player> TurnCommand::Execute(const GameContext &ctx) const {
+        auto player = ctx.players.GetByClientID(player_id);
         if (!player) return nullptr;
 
         if (player->AttemptTurn(direction)) {

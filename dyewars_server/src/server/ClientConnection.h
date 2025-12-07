@@ -10,7 +10,7 @@ class GameServer;
 
 class ClientConnection : public std::enable_shared_from_this<ClientConnection> {
 public:
-    ClientConnection(
+    explicit ClientConnection(
             asio::ip::tcp::socket socket,
             GameServer *server,
             uint64_t client_id);
@@ -58,9 +58,9 @@ private:
     void FailHandshake(const std::string &reason);
 
     // Logging
-    void LogFailedConnection(const std::string &reason);
+    void LogFailedConnection(const std::string &reason) const;
 
-    void LogPacketReceived(const std::vector<uint8_t> &payload, uint16_t size);
+    static void LogPacketReceived(const std::vector<uint8_t> &payload, uint16_t size);
 
     void HandleProtocolViolation();
 
@@ -77,7 +77,7 @@ private:
     // Network
     asio::ip::tcp::socket socket_;
     asio::steady_timer handshake_timer_;
-    uint8_t header_buffer_[4];
+    uint8_t header_buffer_[4]{};
 
     // Identity
     uint64_t client_id_;

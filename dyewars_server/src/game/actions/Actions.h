@@ -17,18 +17,18 @@ namespace Actions {
     namespace Movement {
 
         struct MoveCommand {
-            uint64_t player_id;
+            uint64_t client_id;
             uint8_t direction;
             uint8_t facing;
 
-            std::shared_ptr<Player> Execute(GameContext &ctx) const;
+            std::shared_ptr<Player> Execute(const GameContext &ctx) const;
         };
 
         struct TurnCommand {
             uint64_t player_id;
             uint8_t direction;
 
-            std::shared_ptr<Player> Execute(GameContext &ctx) const;
+            std::shared_ptr<Player> Execute(const GameContext &ctx) const;
         };
 
     }
@@ -37,7 +37,7 @@ namespace Actions {
         uint64_t player_id;
         std::string message;
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
     };
 
     struct WarpCommand {
@@ -46,14 +46,14 @@ namespace Actions {
         int16_t x;
         int16_t y;
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
     };
 
     struct AttackCommand {
         uint64_t player_id;
         uint64_t target_id;
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
     };
 
     struct SkillCommand {
@@ -62,7 +62,7 @@ namespace Actions {
         int16_t target_x;
         int16_t target_y;
 
-        std::shared_ptr<Player> Execute(GameContext &ctx) const;
+        std::shared_ptr<Player> Execute(const GameContext &ctx) const;
     };
 
     using Action = std::variant<

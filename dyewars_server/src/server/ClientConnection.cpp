@@ -11,11 +11,10 @@ using namespace Protocol::Opcode;
 
 ClientConnection::ClientConnection(asio::ip::tcp::socket socket,
                                    GameServer *server,
-                                   uint64_t client_id)
-        : socket_(std::move(socket)),
-          server_(server),
-          client_id_(client_id),
-          handshake_timer_(socket_.get_executor()) {
+                                   const uint64_t client_id)
+    : socket_(std::move(socket)),
+      handshake_timer_(socket_.get_executor()),
+      client_id_(client_id), server_(server) {
     try {
         client_ip_ = socket_.remote_endpoint().address().to_string();
         // TODO DNS lookup is slow, move to worker thread
@@ -103,7 +102,7 @@ void ClientConnection::SendPacket(const Protocol::Packet &pkt) {
     BandwidthMonitor::Instance().RecordOutgoing(data->size());
 
     asio::async_write(socket_, asio::buffer(*data),
-                      [this, self, data](std::error_code ec, std::size_t) {
+                      [this, self, data](const std::error_code ec, std::size_t) {
                           if (ec && ec != asio::error::operation_aborted) {
                               Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
                           }
@@ -116,7 +115,7 @@ void ClientConnection::RawSend(const std::shared_ptr<std::vector<uint8_t>> &data
 
     auto self(shared_from_this());
     asio::async_write(socket_, asio::buffer(*data),
-                      [this, self, data](std::error_code ec, std::size_t) {
+                      [this, self, data](const std::error_code ec, std::size_t) {
                           // Error handling
                           if (ec && ec != asio::error::operation_aborted) {
                               Log::Debug("Write failed for client {}: {}", client_id_, ec.message());
@@ -151,7 +150,7 @@ void ClientConnection::ReadPacketHeader() {
                          }
 
                          // Validate size
-                         uint16_t size = (header_buffer_[2] << 8) | header_buffer_[3];
+                         uint16_t size = static_cast<uint16_t>((header_buffer_[2] << 8) | header_buffer_[3]);
                          if (size == 0 || size >= Protocol::MAX_PAYLOAD_SIZE) {
                              Log::Warn("Client {} sent invalid size: {}", client_id_, size);
                              if (!handshake_complete_) {
@@ -170,7 +169,7 @@ void ClientConnection::ReadPacketPayload(uint16_t size) {
     auto buffer = std::make_shared<std::vector<uint8_t>>(size);
     asio::async_read(socket_,
                      asio::buffer(*buffer),
-                     [this, self, buffer, size](std::error_code ec, std::size_t) {
+                     [this, self, buffer, size](const std::error_code ec, std::size_t) {
                          if (ec) {
                              Disconnect("read error");
                              return;
@@ -279,13 +278,15 @@ void ClientConnection::FailHandshake(const std::string &reason) {
 
 /// =============================\n
 /// LOGGING\n
+/// Both functions do I/O (file, stdout)—expensive and blocking. \n
+/// Fine for debugging, but you'll want to remove or async these in production.\n
 /// =============================\n
-void ClientConnection::LogFailedConnection(const std::string &reason) {
+void ClientConnection::LogFailedConnection(const std::string &reason) const {
     std::ofstream logfile("failed_connections.log", std::ios::app);
     if (logfile.is_open()) {
         // Get current time
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
+        const auto now = std::chrono::system_clock::now();
+        const auto time = std::chrono::system_clock::to_time_t(now);
 
         logfile << std::ctime(&time);  // Includes newline
         logfile << "  IP: " << client_ip_ << "\n";

@@ -12,7 +12,7 @@
 
 namespace PacketHandler {
     void Handle(
-            std::shared_ptr<ClientConnection> client,
+            const std::shared_ptr<ClientConnection> &client,
             const vector<uint8_t> &data,
             GameServer *server
     ) {
@@ -23,34 +23,30 @@ namespace PacketHandler {
 
         uint64_t client_id = client->GetClientID();
 
-        // Check if this client has a player
-        uint64_t player_id = server->Players().GetPlayerIDForClient(client_id);
-        if (player_id == 0) {
-            Log::Warn("Packet from client {} with no player", client_id);
-            return;
-        }
+        //
+        // // Check if this client has a player
+        // uint64_t player_id = server->Players().GetPlayerIDForClient(client_id);
+        // if (player_id == 0) {
+        //     Log::Warn("Packet from client {} with no player", client_id);
+        //     return;
+        // }
 
         size_t offset = 0;
-        uint8_t opcode = Protocol::PacketReader::ReadByte(data, offset);
 
-        switch (opcode) {
+        switch (uint8_t opcode = Protocol::PacketReader::ReadByte(data, offset)) {
             case Protocol::Opcode::Movement::C_Move_Request: {
-                if (data.size() < 3) {
-                    Log::Warn("Move packet too small from client {}", client_id);
-                    return;
-                }
 
-                uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
-                uint8_t facing = Protocol::PacketReader::ReadByte(data, offset);
+                // if (data.size() != Protocol::Opcode::Movement::C_Move_Request.size) {
+                //     Log::Warn("Packet size doesn't equal expected op code requirement: Line {}", __LINE__);
+                //     return;
+                // }
 
-                // Validate direction
-                if (direction > 3 || facing > 3) {
-                    Log::Warn("Invalid direction/facing from client {}", client_id);
-                    return;
-                }
+                const uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
+                const uint8_t facing = Protocol::PacketReader::ReadByte(data, offset);
+
                 // Queue the action - will be processed in game loop
                 server->Players().QueueAction(Actions::Movement::MoveCommand{
-                        player_id,
+                        client_id,
                         direction,
                         facing
                 }, client_id);
@@ -70,7 +66,7 @@ namespace PacketHandler {
                 }
 
                 server->Players().QueueAction(Actions::Movement::TurnCommand{
-                        player_id,
+                        client_id,
                         direction
                 }, client_id);
                 break;
@@ -78,13 +74,13 @@ namespace PacketHandler {
 
             case Protocol::Opcode::Movement::C_Interact_Request: {
                 // TODO: Queue interact action
-                Log::Debug("Interact request from player {}", player_id);
+                Log::Debug("Interact request from player {}", client_id);
                 break;
             }
 
             case Protocol::Opcode::Combat::C_Attack_Request: {
                 // TODO: Queue attack action
-                Log::Debug("Attack request from player {}", player_id);
+                Log::Debug("Attack request from player {}", client_id);
                 break;
             }
 

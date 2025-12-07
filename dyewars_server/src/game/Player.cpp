@@ -16,8 +16,8 @@ void Player::SetPosition(int16_t x, int16_t y) {
     y_ = y;
 }
 
-bool Player::AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &map) {
-    auto now = std::chrono::steady_clock::now();
+bool Player::AttemptMove(const uint8_t direction, const uint8_t sent_facing, const TileMap &map) {
+    const auto now = std::chrono::steady_clock::now();
 
     // Cooldown check (client is 350ms, we allow 330ms for network grace)
     if (now - last_move_time_ < PlayerRegistry::MOVE_COOLDOWN) {
@@ -66,12 +66,12 @@ bool Player::AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &
     return true;
 }
 
-bool Player::AttemptTurn(uint8_t new_facing) {
+bool Player::AttemptTurn(const uint8_t new_facing) {
     if (new_facing > 3 || new_facing == facing_) {
         return false;
     }
 
-    auto now = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
     if (now - last_turn_time_ < PlayerRegistry::TURN_COOLDOWN) {
         return false;
     }

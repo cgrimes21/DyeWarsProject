@@ -11,7 +11,7 @@
 
 class GameServer {
 public:
-    GameServer(asio::io_context &io_context);
+    explicit GameServer(asio::io_context &io_context);
 
     ~GameServer();//Destructor
     void Shutdown();
