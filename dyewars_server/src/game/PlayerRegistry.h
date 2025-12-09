@@ -45,10 +45,20 @@ public:
 
     /// Create a new player for a client connection
     /// Returns the created player (never null)
-    std::shared_ptr<Player> CreatePlayer(uint64_t client_id) {
+    std::shared_ptr<Player> CreatePlayer(
+            uint64_t client_id,
+            uint16_t start_x,
+            uint16_t start_y,
+            uint8_t facing = 2) {
+
         uint64_t player_id = GenerateUniqueID();
         assert(player_id != 0 && "Failed to generate unique player ID");
-        auto player = std::make_shared<Player>(player_id, 0, 0);
+        auto player = std::make_shared<Player>(
+                player_id,
+                start_x,
+                start_y,
+                facing);
+
         player->SetClientID(client_id);
 
         {
@@ -251,7 +261,7 @@ private:
     std::unordered_map<uint64_t, std::shared_ptr<Player>> players_;
 
     /// Client mapping: client_id -> player_id
-    std::unordered_map<uint32_t, uint32_t> client_to_player_;
+    std::unordered_map<uint64_t, uint64_t> client_to_player_;
 
     /// Dirty players: need broadcast this tick
     std::unordered_set<std::shared_ptr<Player>> dirty_players_;

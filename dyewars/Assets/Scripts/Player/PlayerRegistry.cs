@@ -14,14 +14,14 @@ namespace DyeWars.Player
     public class PlayerRegistry : MonoBehaviour
     {
         // All players indexed by their ID
-        private readonly Dictionary<uint, PlayerData> players = new Dictionary<uint, PlayerData>();
+        private readonly Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
 
         // Quick reference to local player
         private PlayerData localPlayer;
 
         // Public access
         public PlayerData LocalPlayer => localPlayer;
-        public IReadOnlyDictionary<uint, PlayerData> AllPlayers => players;
+        public IReadOnlyDictionary<ulong, PlayerData> AllPlayers => players;
         public int PlayerCount => players.Count;
 
         // ====================================================================
@@ -71,7 +71,7 @@ namespace DyeWars.Player
             return players.TryGetValue(playerId, out var player) ? player : null;
         }
 
-        public bool TryGetLocalPlayerID(out uint playerId)
+        public bool TryGetLocalPlayerID(out ulong playerId)
         {
             if (localPlayer != null)
             {

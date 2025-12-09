@@ -31,7 +31,7 @@ namespace DyeWars.Core
     /// </summary>
     public struct LocalPlayerIdAssignedEvent
     {
-        public uint PlayerId;
+        public ulong PlayerId;
     }
 
     // ========================================================================
@@ -43,7 +43,7 @@ namespace DyeWars.Core
     /// </summary>
     public struct OtherPlayerPositionChangedEvent
     {
-        public uint PlayerId;
+        public ulong PlayerId;
         public Vector2Int Position;
         public bool IsCorrection;  // True if this is a server correction
     }
@@ -64,7 +64,7 @@ namespace DyeWars.Core
     /// </summary>
     public struct OtherPlayerFacingChangedEvent
     {
-        public uint PlayerId;
+        public ulong PlayerId;
         public int Facing;
     }
 
@@ -78,7 +78,7 @@ namespace DyeWars.Core
     /// </summary>
     public struct PlayerJoinedEvent
     {
-        public uint PlayerId;
+        public ulong PlayerId;
         public Vector2Int Position;
         public int Facing;
     }
@@ -88,7 +88,7 @@ namespace DyeWars.Core
     /// </summary>
     public struct PlayerLeftEvent
     {
-        public uint PlayerId;
+        public ulong PlayerId;
     }
 
     /// <summary>

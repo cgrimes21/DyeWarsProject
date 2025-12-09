@@ -11,14 +11,14 @@
 
 
 GameServer::GameServer(asio::io_context &io_context)
-    : io_context_(io_context),
-      acceptor_(
-          io_context,
-          asio::ip::tcp::endpoint(
-              asio::ip::address::from_string(Protocol::ADDRESS),
-              Protocol::PORT)),
-      world_(256, 256),
-      lua_engine_(std::make_shared<LuaGameEngine>()) {
+        : io_context_(io_context),
+          acceptor_(
+                  io_context,
+                  asio::ip::tcp::endpoint(
+                          asio::ip::address::from_string(Protocol::ADDRESS),
+                          Protocol::PORT)),
+          world_(256, 256),
+          lua_engine_(std::make_shared<LuaGameEngine>()) {
     Log::Info("Server starting on port {}...", Protocol::PORT);
     StartAccept();
     game_loop_thread_ = std::thread(&GameServer::GameLogicThread, this);
@@ -67,53 +67,53 @@ void GameServer::ReloadScripts() const {
 
 void GameServer::StartAccept() {
     acceptor_.async_accept([this](
-    const std::error_code ec,
-    asio::ip::tcp::socket socket) {
-            if (!ec && server_running_) {
-                // If we fail getting ip, close socket and listen for next connection
-                std::string ip;
-                try {
-                    ip = socket.remote_endpoint().address().to_string();
-                } catch (...) {
-                    socket.close();
-                    if (server_running_) StartAccept();
-                    return;
-                }
-                Log::Info("IP: {} trying to connect.", ip);
+            const std::error_code ec,
+            asio::ip::tcp::socket socket) {
+        if (!ec && server_running_) {
+            // If we fail getting ip, close socket and listen for next connection
+            std::string ip;
+            try {
+                ip = socket.remote_endpoint().address().to_string();
+            } catch (...) {
+                socket.close();
+                if (server_running_) StartAccept();
+                return;
+            }
+            Log::Info("IP: {} trying to connect.", ip);
 
-                if (limiter_.IsBanned(ip)) {
-                    Log::Trace("Rejected banned IP: {}", ip);
-                    socket.close();
-                } else if (!limiter_.CheckRateLimit(ip)) {
-                    Log::Trace("Rate limited IP: {}", ip);
-                    socket.close();
-                } else if (!limiter_.CanConnect(ip)) {
-                    Log::Trace("Connection limit reached for IP: {}", ip);
-                    socket.close();
-                } else {
-                    limiter_.AddConnection(ip);
+            if (limiter_.IsBanned(ip)) {
+                Log::Trace("Rejected banned IP: {}", ip);
+                socket.close();
+            } else if (!limiter_.CheckRateLimit(ip)) {
+                Log::Trace("Rate limited IP: {}", ip);
+                socket.close();
+            } else if (!limiter_.CanConnect(ip)) {
+                Log::Trace("Connection limit reached for IP: {}", ip);
+                socket.close();
+            } else {
+                limiter_.AddConnection(ip);
 
-                    uint64_t client_id = next_client_id_++;
+                uint64_t client_id = next_client_id_++;
 
-                    const auto client = std::make_shared<ClientConnection>(
+                const auto client = std::make_shared<ClientConnection>(
                         std::move(socket),
                         this,
                         client_id);
 
-                    // Start the session's async read chain and handshake timer.
-                    // The session keeps itself alive via shared_from_this() in its async callbacks.
-                    // If the handshake fails or times out, the session will clean itself up.
-                    client->Start();
-                }
-            } else if (ec && server_running_) {
-                // Only log if it's not a shutdown
-                Log::Error("Accept failed: {}", ec.message());
+                // Start the session's async read chain and handshake timer.
+                // The session keeps itself alive via shared_from_this() in its async callbacks.
+                // If the handshake fails or times out, the session will clean itself up.
+                client->Start();
             }
-            // Only restart if still running
-            if (server_running_) {
-                StartAccept();
-            }
-        });
+        } else if (ec && server_running_) {
+            // Only log if it's not a shutdown
+            Log::Error("Accept failed: {}", ec.message());
+        }
+        // Only restart if still running
+        if (server_running_) {
+            StartAccept();
+        }
+    });
 }
 
 /// ============================================================================
@@ -128,7 +128,8 @@ void GameServer::QueueAction(std::function<void()> action) {
 }
 
 void GameServer::ProcessActionQueue() {
-    std::queue<std::function<void()> > to_process; {
+    std::queue<std::function<void()> > to_process;
+    {
         std::lock_guard<std::mutex> lock(action_mutex_);
         std::swap(to_process, action_queue_);
     }
@@ -205,10 +206,10 @@ void GameServer::ProcessTick() {
     if (lua_engine_) {
         for (const auto &player: dirty_players) {
             lua_engine_->OnPlayerMoved(
-                player->GetID(),
-                player->GetX(),
-                player->GetY(),
-                player->GetFacing());
+                    player->GetID(),
+                    player->GetX(),
+                    player->GetY(),
+                    player->GetFacing());
         }
     }
 }
@@ -386,28 +387,30 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
     QueueAction([this, client] {
         // Everything below now runs on game thread
 
+
         // Register with client manager
         clients_.AddClient(client);
+        const uint64_t client_id = client->GetClientID();
 
         // Create player in registry
-        auto player = players_.CreatePlayer(client->GetClientID());
+        auto player = players_.CreatePlayer(client_id, 0, 0);
 
         // Add to world's spatial hash
         world_.AddPlayer(
-            player->GetID(),
-            player->GetX(),
-            player->GetY(),
-            player);
+                player->GetID(),
+                player->GetX(),
+                player->GetY(),
+                player);
 
-        Log::Info("Client {} logged in as player {}", client->GetClientID(), player->GetID());
+        Log::Info("Client {} logged in as player {}", client_id, player->GetID());
 
         // Send welcome packet to this client
         Packets::PacketSender::Welcome(client, player);
 
         // Send nearby players to this client (not all players)
         auto nearby_players = world_.GetPlayersInRange(
-            player->GetX(),
-            player->GetY()
+                player->GetX(),
+                player->GetY()
         );
         for (const auto &other: nearby_players) {
             if (other->GetID() == player->GetID()) continue;
@@ -428,17 +431,19 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
             if (!viewer_conn) continue;
 
             Packets::PacketSender::PlayerJoined(
-                viewer_conn,
-                player->GetID(),
-                player->GetX(),
-                player->GetY(),
-                player->GetFacing()
+                    viewer_conn,
+                    player->GetID(),
+                    player->GetX(),
+                    player->GetY(),
+                    player->GetFacing()
             );
         }
     });
 }
 
 void GameServer::OnClientDisconnect(uint64_t client_id, const std::string &ip) {
+    // TODO by the time this runs on main thread, client could of d/c. that's
+    // why we get a client id here. check when run on main thread
     QueueAction([this, client_id, ip] {
         auto player = players_.GetByClientID(client_id);
         if (player) {

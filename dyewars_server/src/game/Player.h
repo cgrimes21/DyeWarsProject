@@ -41,11 +41,11 @@ enum class MoveResult : uint8_t {
 class Player {
 public:
     explicit Player(
-            uint64_t id,
+            uint64_t player_id,
             int start_x,
             int start_y,
             uint8_t facing = 0)
-            : id_(id),
+            : id_(player_id),
               x_(start_x),
               y_(start_y),
               facing_(facing),

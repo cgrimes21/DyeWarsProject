@@ -14,7 +14,6 @@
 #include <vector>
 #include <memory>
 #include <cstdint>
-#include <cmath>
 #include <functional>
 
 class Player;  // Forward declare
@@ -22,7 +21,9 @@ class Player;  // Forward declare
 /// ============================================================================
 /// SPATIAL HASH
 ///
-/// Grid-based spatial partitioning for O(1) range queries.
+/// Grid-based spatial partitioning for O(K) range queries.
+///
+/// Example: VIEW_RANGE = 5, player at (5,5) sees rectangle (0,0) to (10,10)
 ///
 /// Without spatial hash: "Who's near X?" = check all N entities = O(N)
 /// With spatial hash:    "Who's near X?" = check K entities in nearby cells = O(K)
@@ -38,11 +39,11 @@ public:
     /// Cell size in tiles.
     ///
     /// Tune based on VIEW_RANGE:
-    /// - If VIEW_RANGE = 10, CELL_SIZE = 16 means checking ~9 cells covers view
+    /// - If VIEW_RANGE = 5, CELL_SIZE = 8 means checking ~4 cells covers view
     /// - Too small = many cells, more hash operations
     /// - Too large = many entities per cell, slower filtering
     /// - Rule of thumb: CELL_SIZE ≈ VIEW_RANGE × 1.5
-    static constexpr int16_t CELL_SIZE = 16;
+    static constexpr int16_t CELL_SIZE = 8;  // TODO: Could be uint16_t (map is always positive)
 
     /// ========================================================================
     /// ENTITY MANAGEMENT
@@ -50,7 +51,10 @@ public:
 
     /// Add an entity to the spatial hash
     /// Call when entity spawns or enters the world
-    void Add(uint64_t entity_id, int16_t x, int16_t y, std::shared_ptr<Player> entity = nullptr) {
+    void Add(uint64_t entity_id,
+             int16_t x,    // TODO: Could be uint16_t
+             int16_t y,    // TODO: Could be uint16_t
+             std::shared_ptr<Player> entity = nullptr) {
         int64_t key = CellKey(x, y);
         cells_[key].insert(entity_id);
         entity_cells_[entity_id] = key;
@@ -83,7 +87,9 @@ public:
     /// Update an entity's position
     /// Call when entity moves. Only modifies data if entity changed cells.
     /// Returns true if entity changed cells (useful for enter/leave events)
-    bool Update(uint64_t entity_id, int16_t new_x, int16_t new_y) {
+    bool Update(uint64_t entity_id,
+                int16_t new_x,   // TODO: Could be uint16_t
+                int16_t new_y) { // TODO: Could be uint16_t
         int64_t new_key = CellKey(new_x, new_y);
 
         auto it = entity_cells_.find(entity_id);
@@ -116,18 +122,33 @@ public:
     /// Get all entity IDs within range of a position
     /// Returns entities in cells that overlap with the range
     /// Note: This is a COARSE filter. Caller should do exact distance check.
-    std::vector<uint64_t> GetNearbyIDs(int16_t x, int16_t y, int16_t range) const {
+    ///
+    /// For a 2D tile RPG with VIEW_RANGE = 5:
+    /// Player at (5,5) sees tiles (0,0) to (10,10) — an 11×11 rectangle
+    std::vector<uint64_t> GetNearbyIDs(int16_t x,      // TODO: Could be uint16_t
+                                       int16_t y,      // TODO: Could be uint16_t
+                                       int16_t range)  // TODO: Could be uint16_t
+    const {
         std::vector<uint64_t> result;
 
-        // How many cells do we need to check in each direction?
-        int cells_radius = (range / CELL_SIZE) + 1;
+        // Convert position to cell index
+        int32_t center_cx = x / CELL_SIZE;
+        int32_t center_cy = y / CELL_SIZE;
 
-        // Check all cells in the square region around the position
-        for (int dx = -cells_radius; dx <= cells_radius; dx++) {
-            for (int dy = -cells_radius; dy <= cells_radius; dy++) {
-                int16_t check_x = static_cast<int16_t>(x + dx * CELL_SIZE);
-                int16_t check_y = static_cast<int16_t>(y + dy * CELL_SIZE);
-                int64_t key = CellKey(check_x, check_y);
+        // How many cells do we need to check in each direction?
+        // +1 to handle entities at cell boundaries
+        int32_t cells_radius = (range / CELL_SIZE) + 1;
+
+        // Check all cells in the square region around the center cell
+        for (int32_t dcx = -cells_radius; dcx <= cells_radius; dcx++) {
+            for (int32_t dcy = -cells_radius; dcy <= cells_radius; dcy++) {
+                int32_t cx = center_cx + dcx;
+                int32_t cy = center_cy + dcy;
+
+                // Skip negative cells (map starts at 0,0)
+                if (cx < 0 || cy < 0) continue;
+
+                int64_t key = MakeCellKey(cx, cy);
 
                 auto it = cells_.find(key);
                 if (it != cells_.end()) {
@@ -142,7 +163,10 @@ public:
 
     /// Get all entity pointers within range
     /// More convenient when you need actual entity data
-    std::vector<std::shared_ptr<Player>> GetNearbyEntities(int16_t x, int16_t y, int16_t range) const {
+    std::vector<std::shared_ptr<Player>> GetNearbyEntities(int16_t x,     // TODO: Could be uint16_t
+                                                           int16_t y,     // TODO: Could be uint16_t
+                                                           int16_t range) // TODO: Could be uint16_t
+    const {
         std::vector<std::shared_ptr<Player>> result;
 
         auto ids = GetNearbyIDs(x, y, range);
@@ -211,14 +235,17 @@ private:
     /// INTERNAL - Cell Key Calculation
     /// ========================================================================
 
+    /// Create cell key from cell indices
+    static int64_t MakeCellKey(int32_t cx, int32_t cy) {
+        return (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+    }
+
     /// Convert world coordinates to a unique cell key
-    /// Uses high 32 bits for X cell index, low 32 bits for Y cell index
-    /// This allows negative coordinates (cells can have negative indices)
-    static int64_t CellKey(int16_t x, int16_t y) {
-        // Integer division gives us the cell index
+    /// Map coordinates are always positive (0,0 to width,height)
+    static int64_t CellKey(int16_t x, int16_t y) {  // TODO: Could be uint16_t
         int32_t cx = x / CELL_SIZE;
         int32_t cy = y / CELL_SIZE;
-        return (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+        return MakeCellKey(cx, cy);
     }
 
     /// ========================================================================

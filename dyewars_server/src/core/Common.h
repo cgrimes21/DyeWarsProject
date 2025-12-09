@@ -6,6 +6,7 @@ class TileMap;
 
 class ClientManager;
 
+// TODO Clear out
 // Everything handlers might need
 struct GameContext {
     PlayerRegistry &players;

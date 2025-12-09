@@ -50,7 +50,7 @@ namespace DyeWars.Player
         private GridService gridService;
 
         // Remote player tracking
-        private uint? trackedPlayerId = null;
+        private ulong? trackedPlayerId = null;
         private bool isLocalPlayer = false;
 
         // ====================================================================
@@ -72,7 +72,7 @@ namespace DyeWars.Player
         /// <summary>
         /// Initialize as remote player view.
         /// </summary>
-        public void InitializeAsRemotePlayer(uint playerId)
+        public void InitializeAsRemotePlayer(ulong playerId)
         {
             isLocalPlayer = false;
             trackedPlayerId = playerId;

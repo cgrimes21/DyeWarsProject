@@ -7,7 +7,7 @@
 ///
 /// Single point of access for all spatial queries.
 ///
-/// Created by Anonymous on Dec 05, 2025
+/// Created by Anonymous on Dec 07, 2025
 /// =======================================
 #pragma once
 
@@ -17,10 +17,9 @@
 #include <cmath>
 #include <functional>
 #include "TileMap.h"
-#include "game/SpatialHash.h"
-#include "game/Player.h"
+#include "SpatialHash.h"
 
-class Player;   // Forward declare
+class Player;  // Forward declare
 
 /// ============================================================================
 /// WORLD
@@ -41,20 +40,31 @@ public:
     /// CONFIGURATION
     /// ========================================================================
 
-    /// How far players can see (in tiles)
-    /// Used for view-based broadcasting and visibility checks
-    static constexpr int16_t VIEW_RANGE = 10;
+    /// How far players can see (in tiles) in EACH direction.
+    ///
+    /// VIEW_RANGE = 5 means:
+    /// - Player at (5,5) sees from (0,0) to (10,10)
+    /// - That's an 11×11 tile rectangle (VIEW_RANGE*2 + 1)
+    ///
+    /// VIEW_RANGE = 10 means:
+    /// - Player at (50,50) sees from (40,40) to (60,60)
+    /// - That's a 21×21 tile rectangle
+    ///
+    /// Adjust based on your client's visible area.
+    static constexpr int16_t VIEW_RANGE = 5;  // TODO: Could be uint16_t
 
     /// ========================================================================
     /// CONSTRUCTION
     /// ========================================================================
 
     /// Create a world with a new tilemap
-    explicit World(int16_t width, int16_t height)
-            : tilemap_(std::make_unique<TileMap>(width, height)) {}
+    explicit World(int16_t width, int16_t height)  // TODO: Could be uint16_t
+            : tilemap_(std::make_unique<TileMap>(width, height)) {
+    }
 
-    explicit World(std::unique_ptr<TileMap> tileMap)
-            : tilemap_(std::move(tileMap)) {
+    /// Create a world with an existing tilemap (for loading saved maps)
+    explicit World(std::unique_ptr<TileMap> tilemap)
+            : tilemap_(std::move(tilemap)) {
     }
 
     /// ========================================================================
@@ -66,17 +76,22 @@ public:
 
     const TileMap &GetMap() const { return *tilemap_; }
 
+
+    /// Convenience: Check if position is in bounds
+    bool InBounds(int16_t x, int16_t y) const {  // TODO: Could be uint16_t
+        return tilemap_->InBounds(x, y);
+    }
+
     /// ========================================================================
     /// PLAYER MANAGEMENT - Dynamic Entity Tracking
     /// ========================================================================
 
     /// Add a player to the world
     /// Call when player spawns or enters this world/zone
-    void AddPlayer(
-            uint64_t player_id,
-            int16_t x,
-            int16_t y,
-            std::shared_ptr<Player> player = nullptr) {
+    void AddPlayer(uint64_t player_id,
+                   int16_t x,  // TODO: Could be uint16_t
+                   int16_t y,  // TODO: Could be uint16_t
+                   std::shared_ptr<Player> player = nullptr) {
         spatial_hash_.Add(player_id, x, y, player);
     }
 
@@ -86,10 +101,11 @@ public:
         spatial_hash_.Remove(player_id);
     }
 
-
     /// Update a player's position
     /// Call when player moves. Returns true if player changed spatial cells.
-    bool UpdatePlayerPosition(uint64_t player_id, int16_t new_x, int16_t new_y) {
+    bool UpdatePlayerPosition(uint64_t player_id,
+                              int16_t new_x,   // TODO: Could be uint16_t
+                              int16_t new_y) { // TODO: Could be uint16_t
         return spatial_hash_.Update(player_id, new_x, new_y);
     }
 
@@ -113,17 +129,23 @@ public:
     /// ========================================================================
 
     /// Get all players within VIEW_RANGE of a position
-    /// Uses spatial hash for O(K) lookup, then exact distance filter
+    ///
+    /// Example with VIEW_RANGE = 5:
+    /// GetPlayersInRange(10, 10) returns players in rectangle (5,5) to (15,15)
     std::vector<std::shared_ptr<Player>> GetPlayersInRange(int16_t x, int16_t y) const {
         return GetPlayersInRange(x, y, VIEW_RANGE);
     }
 
     /// Get all players within a custom range of a position
-    std::vector<std::shared_ptr<Player>> GetPlayersInRange(int16_t x, int16_t y, int16_t range) const {
+    /// Range is distance in each direction (total area = range*2+1 squared)
+    std::vector<std::shared_ptr<Player>> GetPlayersInRange(int16_t x,      // TODO: Could be uint16_t
+                                                           int16_t y,      // TODO: Could be uint16_t
+                                                           int16_t range)  // TODO: Could be uint16_t
+    const {
         // Coarse filter: get candidates from spatial hash
         auto candidates = spatial_hash_.GetNearbyEntities(x, y, range);
 
-        // Fine filter: exact distance check
+        // Fine filter: exact distance check (rectangular)
         std::vector<std::shared_ptr<Player>> result;
         result.reserve(candidates.size());
 
@@ -135,13 +157,16 @@ public:
         return result;
     }
 
-    /// Get all player IDs within range (when you just need IDs)
+    /// Get all player IDs within VIEW_RANGE (when you just need IDs)
     std::vector<uint64_t> GetPlayerIDsInRange(int16_t x, int16_t y) const {
         return GetPlayerIDsInRange(x, y, VIEW_RANGE);
     }
 
     /// Get all player IDs within a custom range
-    std::vector<uint64_t> GetPlayerIDsInRange(int16_t x, int16_t y, int16_t range) const {
+    std::vector<uint64_t> GetPlayerIDsInRange(int16_t x,      // TODO: Could be uint16_t
+                                              int16_t y,      // TODO: Could be uint16_t
+                                              int16_t range)  // TODO: Could be uint16_t
+    const {
         auto candidates = spatial_hash_.GetNearbyIDs(x, y, range);
 
         // Fine filter with distance check
@@ -168,15 +193,18 @@ public:
     /// ========================================================================
 
     /// Check if two positions are within view range of each other
-    /// Uses rectangular distance (faster than circular)
+    /// Uses rectangular distance (faster than circular, matches tile-based games)
     bool IsInView(int16_t x1, int16_t y1, int16_t x2, int16_t y2) const {
         return IsInRange(x1, y1, x2, y2, VIEW_RANGE);
     }
 
     /// Check if two positions are within a custom range
-    static bool IsInRange(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t range) {
-        int16_t dx = std::abs(x1 - x2);
-        int16_t dy = std::abs(y1 - y2);
+    /// Rectangular distance: max of |dx| and |dy| must be <= range
+    static bool IsInRange(int16_t x1, int16_t y1,   // TODO: Could be uint16_t
+                          int16_t x2, int16_t y2,   // TODO: Could be uint16_t
+                          int16_t range) {          // TODO: Could be uint16_t
+        int16_t dx = (x1 > x2) ? (x1 - x2) : (x2 - x1);  // abs without cmath
+        int16_t dy = (y1 > y2) ? (y1 - y2) : (y2 - y1);
         return (dx <= range && dy <= range);
     }
 
@@ -222,7 +250,6 @@ public:
     size_t ActiveCellCount() const {
         return spatial_hash_.CellCount();
     }
-
 
 private:
     /// ========================================================================

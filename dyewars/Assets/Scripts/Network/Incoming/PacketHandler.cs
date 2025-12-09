@@ -127,7 +127,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 4)) return;
 
-            uint playerId = PacketReader.ReadU64(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
 
             Debug.Log($"PacketHandler: Assigning player ID {playerId}");
 
@@ -157,7 +157,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, PayloadSize.S_LocalPlayer_Position_Correction - 1)) return;
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
             int x = PacketReader.ReadU16(payload, ref offset);
             int y = PacketReader.ReadU16(payload, ref offset);
             int facing = PacketReader.ReadU8(payload, ref offset);
@@ -180,7 +180,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, PayloadSize.S_RemotePlayer_Left_Game)) return;
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
 
             Core.EventBus.Publish(new Core.PlayerLeftEvent
             {
@@ -198,7 +198,7 @@ namespace DyeWars.Network.Inbound
             {
                 if (!PacketReader.HasBytes(payload, offset, PayloadSize.S_Batch_RemotePlayer_Update_PerPlayer)) break;
 
-                uint playerId = PacketReader.ReadU32(payload, ref offset);
+                ulong playerId = PacketReader.ReadU64(payload, ref offset);
                 int x = PacketReader.ReadU16(payload, ref offset);
                 int y = PacketReader.ReadU16(payload, ref offset);
                 int facing = PacketReader.ReadU8(payload, ref offset);
@@ -226,7 +226,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 9)) return; // 4+2+2+1 minimum
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
             int x = PacketReader.ReadU16(payload, ref offset);
             int y = PacketReader.ReadU16(payload, ref offset);
             int facing = PacketReader.ReadU8(payload, ref offset);
@@ -262,7 +262,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 10)) return; // 4+2+2+2
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
             ushort damage = PacketReader.ReadU16(payload, ref offset);
             ushort currentHp = PacketReader.ReadU16(payload, ref offset);
             ushort maxHp = PacketReader.ReadU16(payload, ref offset);
@@ -275,7 +275,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 10)) return;
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
             ushort amount = PacketReader.ReadU16(payload, ref offset);
             ushort currentHp = PacketReader.ReadU16(payload, ref offset);
             ushort maxHp = PacketReader.ReadU16(payload, ref offset);
@@ -288,7 +288,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 4)) return;
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
 
             // TODO: Publish death event when combat system is implemented
             Debug.Log($"PacketHandler: Player {playerId} died");
@@ -298,7 +298,7 @@ namespace DyeWars.Network.Inbound
         {
             if (!PacketReader.HasBytes(payload, offset, 8)) return; // 4+2+2
 
-            uint playerId = PacketReader.ReadU32(payload, ref offset);
+            ulong playerId = PacketReader.ReadU64(payload, ref offset);
             int x = PacketReader.ReadU16(payload, ref offset);
             int y = PacketReader.ReadU16(payload, ref offset);
 

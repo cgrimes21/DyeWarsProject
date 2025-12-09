@@ -20,7 +20,7 @@ namespace DyeWars.Player
 
         // Track created views for cleanup
         private GameObject localPlayerView;
-        private readonly Dictionary<uint, GameObject> remotePlayerViews = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<ulong, GameObject> remotePlayerViews = new Dictionary<ulong, GameObject>();
 
         // Service references
         private PlayerRegistry playerRegistry;
@@ -79,11 +79,17 @@ namespace DyeWars.Player
         private void OnPlayerJoined(PlayerJoinedEvent evt)
         {
             // Check if this is the local player (already handled by OnLocalPlayerIdAssigned)
-            if (playerRegistry != null &&
-                playerRegistry.LocalPlayer != null &&
-                evt.PlayerId == playerRegistry.LocalPlayer.PlayerId)
+            if (playerRegistry != null)
             {
-                return;
+                if (playerRegistry.LocalPlayer != null)
+                {
+                    if (evt.PlayerId == playerRegistry.LocalPlayer.PlayerId)
+                    {
+                        return;
+                    }
+
+                }
+
             }
 
             // Remote player
@@ -99,7 +105,7 @@ namespace DyeWars.Player
         // PLAYER CREATION
         // ====================================================================
 
-        private void CreateLocalPlayer(uint playerId)
+        private void CreateLocalPlayer(ulong playerId)
         {
             if (localPlayerPrefab == null)
             {
@@ -128,7 +134,7 @@ namespace DyeWars.Player
             Debug.Log($"PlayerViewFactory: Created local player view for {playerId}");
         }
 
-        private void CreateRemotePlayer(uint playerId, Vector2Int position, int facing)
+        private void CreateRemotePlayer(ulong playerId, Vector2Int position, int facing)
         {
             if (remotePlayerPrefab == null)
             {
@@ -164,7 +170,7 @@ namespace DyeWars.Player
             Debug.Log($"PlayerViewFactory: Created remote player view for {playerId} at {position}");
         }
 
-        private void DestroyRemotePlayer(uint playerId)
+        private void DestroyRemotePlayer(ulong playerId)
         {
             if (remotePlayerViews.TryGetValue(playerId, out var playerObj))
             {
