@@ -3,7 +3,7 @@
 // This is the single source of truth for player state.
 //
 // Other systems query this registry to get player information.
-// The registry listens to network events and updates player data accordingly.
+// PacketHandler calls methods directly to update player data.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -19,6 +19,9 @@ namespace DyeWars.Player
         // Quick reference to local player
         private PlayerData localPlayer;
 
+        // Callback for view updates (set by PlayerViewFactory)
+        public System.Action<ulong, Vector2Int, int> OnRemotePlayerUpdated;
+
         // Public access
         public PlayerData LocalPlayer => localPlayer;
         public IReadOnlyDictionary<ulong, PlayerData> AllPlayers => players;
@@ -33,40 +36,16 @@ namespace DyeWars.Player
             ServiceLocator.Register<PlayerRegistry>(this);
         }
 
-        private void OnEnable()
-        {
-            EventBus.Subscribe<LocalPlayerIdAssignedEvent>(OnLocalPlayerIdAssigned);
-            EventBus.Subscribe<OtherPlayerPositionChangedEvent>(OnOtherPlayerPositionChanged);
-            EventBus.Subscribe<OtherPlayerFacingChangedEvent>(OnOtherPlayerFacingChanged);
-            EventBus.Subscribe<PlayerLeftEvent>(OnPlayerLeft);
-
-            EventBus.Subscribe<LocalPlayerFacingChangedEvent>(OnLocalPlayerFacingChanged);
-            EventBus.Subscribe<LocalPlayerPositionCorrectedEvent>(OnLocalPlayerPositionCorrected);
-
-        }
-
-        private void OnDisable()
-        {
-            EventBus.Unsubscribe<LocalPlayerIdAssignedEvent>(OnLocalPlayerIdAssigned);
-            EventBus.Unsubscribe<OtherPlayerPositionChangedEvent>(OnOtherPlayerPositionChanged);
-            EventBus.Unsubscribe<OtherPlayerFacingChangedEvent>(OnOtherPlayerFacingChanged);
-            EventBus.Unsubscribe<PlayerLeftEvent>(OnPlayerLeft);
-
-            EventBus.Unsubscribe<LocalPlayerFacingChangedEvent>(OnLocalPlayerFacingChanged);
-            EventBus.Unsubscribe<LocalPlayerPositionCorrectedEvent>(OnLocalPlayerPositionCorrected);
-
-        }
-
         private void OnDestroy()
         {
             ServiceLocator.Unregister<PlayerRegistry>();
         }
 
         // ====================================================================
-        // PUBLIC API
+        // PUBLIC API - Queries
         // ====================================================================
 
-        public PlayerData GetPlayer(uint playerId)
+        public PlayerData GetPlayer(ulong playerId)
         {
             return players.TryGetValue(playerId, out var player) ? player : null;
         }
@@ -87,15 +66,12 @@ namespace DyeWars.Player
             foreach (var player in players.Values)
             {
                 if (player.Position == position)
-                {
                     return true;
-                }
             }
-
             return false;
         }
 
-        public bool HasPlayer(uint playerId)
+        public bool HasPlayer(ulong playerId)
         {
             return players.ContainsKey(playerId);
         }
@@ -105,124 +81,107 @@ namespace DyeWars.Player
             foreach (var player in players.Values)
             {
                 if (!player.IsLocalPlayer)
-                {
                     yield return player;
-                }
             }
         }
 
         // ====================================================================
-        // LOCAL PLAYER ACTIONS
+        // PUBLIC API - Local Player Actions (called by LocalPlayerController)
         // ====================================================================
 
         public void PredictLocalPosition(Vector2Int newPosition)
         {
             if (localPlayer == null) return;
-
             localPlayer.SetPosition(newPosition);
-
-            EventBus.Publish(new LocalPlayerPositionChangedEvent()
-            {
-                Position = newPosition,
-                IsCorrection = false
-            });
         }
 
         public void SetLocalFacing(int facing)
         {
             if (localPlayer == null) return;
-
             localPlayer.SetFacing(facing);
-
-            EventBus.Publish(new LocalPlayerFacingChangedEvent()
-            {
-                Facing = facing,
-            });
         }
 
         // ====================================================================
-        // EVENT HANDLERS
+        // PACKET HANDLERS - Called directly by PacketHandler
         // ====================================================================
 
-        private void OnLocalPlayerIdAssigned(LocalPlayerIdAssignedEvent evt)
+        public void HandleLocalPlayerAssigned(ulong playerId)
         {
-            Debug.Log($"PlayerRegistry: Creating local player with ID {evt.PlayerId}");
-            localPlayer = new PlayerData(evt.PlayerId, isLocalPlayer: true);
-            players[evt.PlayerId] = localPlayer;
-
-            EventBus.Publish(new PlayerJoinedEvent
-            {
-                PlayerId = evt.PlayerId,
-                Position = localPlayer.Position,
-                Facing = localPlayer.Facing
-            });
+            Debug.Log("PlayerRegistry: Creating local player with ID " + playerId);
+            localPlayer = new PlayerData(playerId, isLocalPlayer: true);
+            players[playerId] = localPlayer;
         }
 
-        private void OnLocalPlayerPositionCorrected(LocalPlayerPositionCorrectedEvent evt)
+        public void HandleLocalPositionCorrection(Vector2Int position, int facing)
         {
             if (localPlayer == null) return;
 
-            int dx = Mathf.Abs(localPlayer.Position.x - evt.Position.x);
-            int dy = Mathf.Abs(localPlayer.Position.y - evt.Position.y);
+            int dx = Mathf.Abs(localPlayer.Position.x - position.x);
+            int dy = Mathf.Abs(localPlayer.Position.y - position.y);
 
             if (dx > 1 || dy > 1)
-            {
-                Debug.Log($"PlayerRegistry: Large correction, snapping to {evt.Position}");
-            }
+                Debug.Log("PlayerRegistry: Large correction, snapping to " + position);
             else if (dx > 0 || dy > 0)
-            {
-                Debug.Log($"PlayerRegistry: Small correction to {evt.Position}");
-            }
+                Debug.Log("PlayerRegistry: Small correction to " + position);
 
-            localPlayer.SetPosition(evt.Position);
+            localPlayer.SetPosition(position);
+            localPlayer.SetFacing(facing);
 
-            EventBus.Publish(new LocalPlayerPositionChangedEvent
-            {
-                Position = evt.Position,
-                IsCorrection = true
-            });
+            // Notify LocalPlayerController via event (it needs to update its internal state)
+            EventBus.Publish(new LocalPlayerPositionCorrectedEvent { Position = position });
+            EventBus.Publish(new LocalPlayerFacingChangedEvent { Facing = facing });
         }
 
-        private void OnLocalPlayerFacingChanged(LocalPlayerFacingChangedEvent evt)
+        public void HandleLocalFacingCorrection(int facing)
         {
-            localPlayer?.SetFacing(evt.Facing);
+            if (localPlayer == null) return;
+            localPlayer.SetFacing(facing);
+            EventBus.Publish(new LocalPlayerFacingChangedEvent { Facing = facing });
         }
 
-        private void OnOtherPlayerPositionChanged(OtherPlayerPositionChangedEvent evt)
+        public void HandleRemotePlayerJoined(ulong playerId, Vector2Int position, int facing)
         {
-            if (!players.TryGetValue(evt.PlayerId, out var player))
+            if (players.ContainsKey(playerId))
             {
-                // New remote player discovered
-                player = new PlayerData(evt.PlayerId, isLocalPlayer: false);
-                players[evt.PlayerId] = player;
-
-                Debug.Log($"PlayerRegistry: New remote player {evt.PlayerId}");
-
-                EventBus.Publish(new PlayerJoinedEvent
-                {
-                    PlayerId = evt.PlayerId,
-                    Position = evt.Position,
-                    Facing = Direction.Down
-                });
+                Debug.LogWarning("PlayerRegistry: Player " + playerId + " already exists");
+                return;
             }
 
-            player.SetPosition(evt.Position);
+            var player = new PlayerData(playerId, isLocalPlayer: false);
+            player.SetPosition(position);
+            player.SetFacing(facing);
+            players[playerId] = player;
+
+            Debug.Log("PlayerRegistry: Remote player " + playerId + " joined at " + position);
         }
 
-        private void OnOtherPlayerFacingChanged(OtherPlayerFacingChangedEvent evt)
+        public void HandleRemotePlayerUpdate(ulong playerId, Vector2Int position, int facing)
         {
-            if (players.TryGetValue(evt.PlayerId, out var player))
+            // Skip our own updates
+            if (localPlayer != null && playerId == localPlayer.PlayerId) return;
+
+            if (!players.TryGetValue(playerId, out var player))
             {
-                player.SetFacing(evt.Facing);
+                // New remote player discovered via batch update
+                player = new PlayerData(playerId, isLocalPlayer: false);
+                players[playerId] = player;
+                Debug.Log("PlayerRegistry: New remote player " + playerId + " discovered");
+                
+                // Notify view factory to create view
+                OnRemotePlayerUpdated?.Invoke(playerId, position, facing);
             }
+
+            player.SetPosition(position);
+            player.SetFacing(facing);
+
+            // Notify view to animate
+            OnRemotePlayerUpdated?.Invoke(playerId, position, facing);
         }
 
-        private void OnPlayerLeft(PlayerLeftEvent evt)
+        public void HandlePlayerLeft(ulong playerId)
         {
-            if (players.Remove(evt.PlayerId))
-            {
-                Debug.Log($"PlayerRegistry: Player {evt.PlayerId} removed");
-            }
+            if (players.Remove(playerId))
+                Debug.Log("PlayerRegistry: Player " + playerId + " removed");
         }
     }
 }
