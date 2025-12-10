@@ -162,7 +162,13 @@ void GameServer::GameLogicThread() {
         // 2. Process game tick (movement, broadcasting, etc.)
         ProcessTick();
 
-        // 3. Update bandwidth monitor
+        // 3. Send pings periodically
+        if (++ping_tick_counter_ >= PING_INTERVAL_TICKS) {
+            ping_tick_counter_ = 0;
+            SendPingToAllClients();
+        }
+
+        // 4. Update bandwidth monitor
         BandwidthMonitor::Instance().Tick();
 
         // 4. Track performance
@@ -335,10 +341,7 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         auto nearby_viewers = world_.GetPlayersInRange(px, py);
 
         for (const auto &viewer: nearby_viewers) {
-            // Skip self - don't send player their own movement
-            if (viewer->GetID() == dirty_id) continue;
-
-            // World already did exact distance check in GetPlayersInRange
+            // Include self - client uses this for server-authoritative position sync
             viewer_updates[viewer->GetID()].push_back(dirty_player);
         }
     }
@@ -357,7 +360,7 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         // Build batch packet
         Protocol::Packet batch;
         Protocol::PacketWriter::WriteByte(batch.payload,
-                                          Protocol::Opcode::Batch::S_RemotePlayer_Update);
+                                          Protocol::Opcode::Batch::S_Player_Spatial);
         Protocol::PacketWriter::WriteByte(batch.payload, 0); // Placeholder for count
 
         uint8_t count = 0;
@@ -407,30 +410,24 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
         // Send welcome packet to this client
         Packets::PacketSender::Welcome(client, player);
 
-        // Send nearby players to this client (not all players)
+        // Get nearby players for this client (includes self)
         auto nearby_players = world_.GetPlayersInRange(
                 player->GetX(),
                 player->GetY()
         );
-        for (const auto &other: nearby_players) {
-            if (other->GetID() == player->GetID()) continue;
 
-            Packets::PacketSender::PlayerJoined(client,
-                                                other->GetID(),
-                                                other->GetX(),
-                                                other->GetY(),
-                                                other->GetFacing());
-        }
+        // Send all nearby players (including self) to new client
+        // This syncs client with server's authoritative position
+        Packets::PacketSender::BatchPlayerSpatial(client, nearby_players);
 
-
-        // Broadcast this player joined to nearby players
-        for (const auto &viewer: nearby_players) {
+        // Broadcast new player to all nearby viewers (single player per viewer)
+        for (const auto &viewer : nearby_players) {
             if (viewer->GetID() == player->GetID()) continue;
 
             auto viewer_conn = clients_.GetClientCopy(viewer->GetClientID());
             if (!viewer_conn) continue;
 
-            Packets::PacketSender::PlayerJoined(
+            Packets::PacketSender::PlayerSpatial(
                     viewer_conn,
                     player->GetID(),
                     player->GetX(),
@@ -438,6 +435,12 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
                     player->GetFacing()
             );
         }
+    });
+}
+
+void GameServer::SendPingToAllClients() {
+    clients_.BroadcastToAll([](const std::shared_ptr<ClientConnection> &client) {
+        client->SendPing();
     });
 }
 

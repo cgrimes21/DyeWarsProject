@@ -97,14 +97,15 @@ public:
         }
     }
 
-    MoveResult AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &map) {
+    MoveResult AttemptMove(uint8_t direction, uint8_t sent_facing, const TileMap &map, uint32_t client_ping_ms = 0) {
         const auto now = std::chrono::steady_clock::now();
         // ====================================================================
         // COOLDOWN CHECK
         // Prevent speed hacking by enforcing minimum time between moves
-        // Client is 350ms, we allow 330ms for network grace
+        // Adjust for client ping - higher ping = more grace
         // ====================================================================
-        if (now - last_move_time_ < MOVE_COOLDOWN) {
+        auto adjusted_cooldown = GetAdjustedCooldown(client_ping_ms);
+        if (now - last_move_time_ < adjusted_cooldown) {
             return MoveResult::OnCooldown;
         }
         // ====================================================================
@@ -152,7 +153,7 @@ public:
         // Ask the map if destination is walkable
         // This is the only external dependency - we don't own map data
         // ====================================================================
-        if (!map.IsTileBlocked(new_x, new_y)) {
+        if (map.IsTileBlocked(new_x, new_y)) {
             return MoveResult::Blocked;
         }
 
@@ -166,20 +167,21 @@ public:
         return MoveResult::Success;
     }
 
-    /// Check if player can move (not on cooldown)
+    /// Check if player can move (not on cooldown) - uses base cooldown
     bool CheckMoveCooldown() const {
         auto now = std::chrono::steady_clock::now();
-        return (now - last_move_time_) >= MOVE_COOLDOWN;
+        return (now - last_move_time_) >= std::chrono::milliseconds(BASE_MOVE_COOLDOWN_MS);
     }
 
-    /// Get time until next move is allowed (for client prediction)
+    /// Get time until next move is allowed (for client prediction) - uses base cooldown
     std::chrono::milliseconds TimeUntilCanMove() const {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move_time_);
-        if (elapsed >= MOVE_COOLDOWN) {
+        auto base_cooldown = std::chrono::milliseconds(BASE_MOVE_COOLDOWN_MS);
+        if (elapsed >= base_cooldown) {
             return std::chrono::milliseconds(0);
         }
-        return MOVE_COOLDOWN - elapsed;
+        return base_cooldown - elapsed;
     }
 
     bool AttemptTurn(uint8_t new_facing) {
@@ -203,10 +205,35 @@ private:
     /// CONFIGURATION
     /// ========================================================================
 
-    /// Movement cooldowns (client timing minus network grace)
-    static constexpr auto MOVE_COOLDOWN = std::chrono::milliseconds(330);  // Client: 350ms
-    static constexpr auto TURN_COOLDOWN = std::chrono::milliseconds(200);  // Client: 220ms
-    static constexpr auto NETWORK_GRACE = std::chrono::milliseconds(20);
+    /// Movement cooldowns
+    /// Client sends moves every 350ms
+    /// Base cooldown is lower to account for network variance
+    static constexpr int BASE_MOVE_COOLDOWN_MS = 280;
+    static constexpr int MIN_MOVE_COOLDOWN_MS = 200;   // Floor to prevent speed hacks
+    static constexpr int MAX_PING_ADJUSTMENT_MS = 100; // Cap ping adjustment
+    static constexpr auto TURN_COOLDOWN = std::chrono::milliseconds(150);  // Client: 220ms
+
+    /// Calculate cooldown adjusted for client ping
+    /// Higher ping = lower cooldown (more forgiveness)
+    static std::chrono::milliseconds GetAdjustedCooldown(uint32_t ping_ms) {
+        // Half of RTT is one-way latency - that's how late packets arrive
+        int one_way_latency = static_cast<int>(ping_ms) / 2;
+
+        // Cap the adjustment to prevent abuse
+        if (one_way_latency > MAX_PING_ADJUSTMENT_MS) {
+            one_way_latency = MAX_PING_ADJUSTMENT_MS;
+        }
+
+        // Reduce cooldown by one-way latency
+        int adjusted = BASE_MOVE_COOLDOWN_MS - one_way_latency;
+
+        // Never go below minimum (anti-cheat)
+        if (adjusted < MIN_MOVE_COOLDOWN_MS) {
+            adjusted = MIN_MOVE_COOLDOWN_MS;
+        }
+
+        return std::chrono::milliseconds(adjusted);
+    }
 
     // Identity
     uint64_t id_;

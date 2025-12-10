@@ -127,4 +127,10 @@ private:/// ====================================================================
     /// Even at 1 million connections per second, it takes 584,000 years to wrap.
     /// </summary>
     std::atomic<uint64_t> next_client_id_{1};
+
+    // Ping tracking
+    static constexpr int PING_INTERVAL_TICKS = 200;  // Every 10 seconds at 20 TPS
+    int ping_tick_counter_{0};
+
+    void SendPingToAllClients();
 };

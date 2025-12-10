@@ -225,31 +225,32 @@ namespace Protocol::Opcode {
     // ========================================================================
     namespace RemotePlayer {
         // Player entered visible range.
-        // Payload: [playerId:4][x:2][y:2][facing:1][appearanceData:variable]
+        // Payload: [playerId:8][x:2][y:2][facing:1][appearanceData:variable]
         constexpr uint8_t S_Entered_Range = 0x20;
 
         // Player left visible range.
-        // Payload: [playerId:4]
+        // Payload: [playerId:8]
         constexpr uint8_t S_Left_Range = 0x21;
 
         // Player appearance changed.
-        // Payload: [playerId:4][appearanceData:variable]
+        // Payload: [playerId:8][appearanceData:variable]
         constexpr uint8_t S_Appearance_Changed = 0x22;
 
         // Player died.
-        // Payload: [playerId:4]
+        // Payload: [playerId:8]
         constexpr uint8_t S_Died = 0x23;
 
         // Player respawned.
-        // Payload: [playerId:4][x:2][y:2]
+        // Payload: [playerId:8][x:2][y:2]
         constexpr uint8_t S_Respawned = 0x24;
 
-        // Player joined the game.
-        // Payload: [playerId:4][x:2][y:2][facing:1][nameLength:1][name:variable]
-        constexpr uint8_t S_Joined_Game = 0x25;
+        // DEPRECATED: Use Batch::S_Player_Spatial instead
+        // // Player joined the game.
+        // // Payload: [playerId:8][x:2][y:2][facing:1][nameLength:1][name:variable]
+        // constexpr uint8_t S_Joined_Game = 0x25;
 
         // Player left the game.
-        // Payload: [playerId:4]
+        // Payload: [playerId:8]
         constexpr uint8_t S_Left_Game = 0x26;
     }
 
@@ -290,12 +291,18 @@ namespace Protocol::Opcode {
     // BATCH UPDATES (Server -> Client)
     // ========================================================================
     namespace Batch {
-        // Batch remote player positions.
-        // Payload: [count:1][[playerId:4][x:2][y:2][facing:1]]...
-        constexpr uint8_t S_RemotePlayer_Update = 0x27;
+        // Batch player spatial update (position + facing).
+        // Creates player on client if doesn't exist, otherwise updates.
+        // Payload: [count:1][[playerId:8][x:2][y:2][facing:1]]... (13 bytes per player)
+        constexpr uint8_t S_Player_Spatial = 0x25;
+
+        // DEPRECATED: Use S_Player_Spatial instead
+        // // Batch remote player positions.
+        // // Payload: [count:1][[playerId:8][x:2][y:2][facing:1]]...
+        // constexpr uint8_t S_RemotePlayer_Update = 0x27;
 
         // Batch entity positions.
-        // Payload: [count:1][[entityId:4][x:2][y:2][facing:1]]...
+        // Payload: [count:1][[entityId:8][x:2][y:2][facing:1]]...
         constexpr uint8_t S_Entity_Update = 0x2F;
     }
 
@@ -530,10 +537,10 @@ namespace Protocol::PayloadSize {
     constexpr size_t S_Entity_Respawned = 9; // opcode + id(4) + x(2) + y(2)
 
     // Batch
-    constexpr size_t S_Batch_RemotePlayer_Update_Header = 2; // opcode + count
-    constexpr size_t S_Batch_RemotePlayer_Update_PerPlayer = 9; // id(4) + x(2) + y(2) + facing
+    constexpr size_t S_Batch_Player_Spatial_Header = 2; // opcode + count
+    constexpr size_t S_Batch_Player_Spatial_PerPlayer = 13; // id(8) + x(2) + y(2) + facing(1)
     constexpr size_t S_Batch_Entity_Update_Header = 2; // opcode + count
-    constexpr size_t S_Batch_Entity_Update_PerEntity = 9; // id(4) + x(2) + y(2) + facing
+    constexpr size_t S_Batch_Entity_Update_PerEntity = 13; // id(8) + x(2) + y(2) + facing(1)
 
     // Combat
     constexpr size_t S_Combat_Effect_Play = 8; // opcode + effectId(2) + x(2) + y(2) + param
@@ -651,8 +658,7 @@ namespace Protocol::OpcodeUtil {
                 return "RemotePlayer::S_Died";
             case Opcode::RemotePlayer::S_Respawned:
                 return "RemotePlayer::S_Respawned";
-            case Opcode::RemotePlayer::S_Joined_Game:
-                return "RemotePlayer::S_Joined_Game";
+            // S_Joined_Game (0x25) replaced by Batch::S_Player_Spatial
             case Opcode::RemotePlayer::S_Left_Game:
                 return "RemotePlayer::S_Left_Game";
 
@@ -673,8 +679,8 @@ namespace Protocol::OpcodeUtil {
                 return "Entity::S_Respawned";
 
             // Batch
-            case Opcode::Batch::S_RemotePlayer_Update:
-                return "Batch::S_RemotePlayer_Update";
+            case Opcode::Batch::S_Player_Spatial:
+                return "Batch::S_Player_Spatial";
             case Opcode::Batch::S_Entity_Update:
                 return "Batch::S_Entity_Update";
 
@@ -784,8 +790,9 @@ namespace Protocol::OpcodeUtil {
         if (opcode >= 0x01 && opcode <= 0x0F) return "Movement";
         if (opcode >= 0x10 && opcode <= 0x19) return "LocalPlayer";
         if (opcode >= 0x1A && opcode <= 0x1F) return "Map";
-        if (opcode >= 0x20 && opcode <= 0x26) return "RemotePlayer";
-        if (opcode == 0x27) return "Batch";
+        if (opcode >= 0x20 && opcode <= 0x24) return "RemotePlayer";
+        if (opcode == 0x25) return "Batch";
+        if (opcode == 0x26) return "RemotePlayer";
         if (opcode >= 0x28 && opcode <= 0x2E) return "Entity";
         if (opcode == 0x2F) return "Batch";
         if (opcode >= 0x30 && opcode <= 0x4F) return "Combat";

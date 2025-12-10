@@ -123,11 +123,15 @@ Opcode naming: `C_` = Client->Server, `S_` = Server->Client
 | `0x10` | `LocalPlayer::S_Welcome` | `[id:8][x:2][y:2][facing:1]` (14 bytes) | `Welcome()` |
 | `0x11` | `LocalPlayer::S_Position_Correction` | `[x:2][y:2][facing:1]` (6 bytes) | `PositionCorrection()` |
 | `0x12` | `LocalPlayer::S_Facing_Correction` | `[facing:1]` (2 bytes) | `FacingCorrection()` |
-| `0x25` | `RemotePlayer::S_Joined_Game` | `[id:8][x:2][y:2][facing:1]` (14 bytes) | `PlayerJoined()` |
+| `0x25` | `Batch::S_Player_Spatial` | `[count:1][[id:8][x:2][y:2][facing:1]]...` (2+ bytes, 13 per player) | `BatchPlayerSpatial()` / `PlayerSpatial()` |
 | `0x26` | `RemotePlayer::S_Left_Game` | `[id:8]` (9 bytes) | `PlayerLeft()` |
-| `0x27` | `Batch::S_RemotePlayer_Update` | `[count:1][[id:8][x:2][y:2][facing:1]]...` (2+ bytes) | `PlayerUpdate()` |
 | `0xF0` | `Server::Connection::S_HandshakeAccepted` | (none) (1 byte) | `GivePlayerID()` |
 | `0xF2` | `Server::Connection::S_ServerShutdown` | `[reason:1]` (2 bytes) | `ServerShutdown()` |
+
+**Batch Player Spatial (0x25)** - Unified packet for player position/facing:
+- Client creates the player if it doesn't exist, otherwise updates position/facing
+- Used for: initial player list on login, ongoing position broadcasts
+- Replaces the old separate `S_Joined_Game` and `S_RemotePlayer_Update` packets
 
 **Request -> Action -> Response Flow:**
 ```
@@ -136,7 +140,7 @@ Client sends C_Move_Request (0x01)
   -> Actions::Movement::Move() queues lambda via QueueAction()
   -> Game loop executes: Player::AttemptMove() validates
   -> Success: World::UpdatePlayerPosition(), PlayerRegistry::MarkDirty()
-  -> BroadcastDirtyPlayers() sends S_RemotePlayer_Update (0x27) to nearby players
+  -> BroadcastDirtyPlayers() sends S_Player_Spatial (0x25) to nearby players
 ```
 
 ### Lua Scripting

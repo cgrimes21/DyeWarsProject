@@ -90,22 +90,24 @@ public:
     bool Update(uint64_t entity_id,
                 int16_t new_x,   // TODO: Could be uint16_t
                 int16_t new_y) { // TODO: Could be uint16_t
+        auto it = entity_cells_.find(entity_id);
+        if (it == entity_cells_.end()) {
+            return false;  // Entity not in spatial hash, can't update
+        }
+
         int64_t new_key = CellKey(new_x, new_y);
 
-        auto it = entity_cells_.find(entity_id);
-        if (it != entity_cells_.end()) {
-            // Same cell? No update needed (common case!)
-            // Players often move within the same cell many times
-            if (it->second == new_key) {
-                return false;
-            }
+        // Same cell? No update needed (common case!)
+        // Players often move within the same cell many times
+        if (it->second == new_key) {
+            return false;
+        }
 
-            // Remove from old cell
-            int64_t old_key = it->second;
-            cells_[old_key].erase(entity_id);
-            if (cells_[old_key].empty()) {
-                cells_.erase(old_key);
-            }
+        // Remove from old cell
+        int64_t old_key = it->second;
+        cells_[old_key].erase(entity_id);
+        if (cells_[old_key].empty()) {
+            cells_.erase(old_key);
         }
 
         // Add to new cell

@@ -324,6 +324,39 @@ void ClientConnection::HandleProtocolViolation() {
     }
 }
 
+void ClientConnection::SendPing() {
+    ping_sent_time_ = std::chrono::steady_clock::now();
+
+    // Send timestamp so client can echo it back
+    auto timestamp = static_cast<uint32_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            ping_sent_time_.time_since_epoch()
+        ).count() & 0xFFFFFFFF
+    );
+
+    Protocol::Packet pkt;
+    Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Server::Connection::S_Ping_Request);
+    Protocol::PacketWriter::WriteUInt(pkt.payload, timestamp);
+    pkt.size = static_cast<uint16_t>(pkt.payload.size());
+    SendPacket(pkt);
+}
+
+void ClientConnection::RecordPing(uint32_t ping_ms) {
+    // Store in circular buffer
+    ping_samples_[ping_sample_index_] = ping_ms;
+    ping_sample_index_ = (ping_sample_index_ + 1) % PING_SAMPLE_COUNT;
+    if (ping_sample_filled_ < PING_SAMPLE_COUNT) {
+        ping_sample_filled_++;
+    }
+
+    // Calculate average
+    uint32_t sum = 0;
+    for (size_t i = 0; i < ping_sample_filled_; i++) {
+        sum += ping_samples_[i];
+    }
+    avg_ping_ms_ = sum / static_cast<uint32_t>(ping_sample_filled_);
+}
+
 // --- SENDING FUNCTIONS ---
 /*
 

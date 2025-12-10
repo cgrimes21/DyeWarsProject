@@ -14,7 +14,6 @@ using UnityEngine;
 using DyeWars.Network.Protocol;
 using DyeWars.Network.Connection;
 
-
 namespace DyeWars.Network.Outbound
 {
     public class PacketSender

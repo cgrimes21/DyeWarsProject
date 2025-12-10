@@ -275,10 +275,10 @@ namespace DyeWars.Network.Protocol
             public const byte S_Respawned = 0x24;
 
             /// <summary>
-            /// Player joined the game.
-            /// Payload: [playerId:4][x:2][y:2][facing:1][nameLength:1][name:variable]
+            /// Batch player spatial sync - syncs all players' positions and facing.
+            /// Payload: [count:1][[playerId:8][x:2][y:2][facing:1]]...
             /// </summary>
-            public const byte S_Joined_Game = 0x25;
+            public const byte S_Batch_Player_Spatial = 0x25;
 
             /// <summary>
             /// Player left the game.
@@ -749,7 +749,7 @@ namespace DyeWars.Network.Protocol
             Opcode.RemotePlayer.S_Appearance_Changed => "RemotePlayer.S_Appearance_Changed",
             Opcode.RemotePlayer.S_Died => "RemotePlayer.S_Died",
             Opcode.RemotePlayer.S_Respawned => "RemotePlayer.S_Respawned",
-            Opcode.RemotePlayer.S_Joined_Game => "RemotePlayer.S_Joined_Game",
+            Opcode.RemotePlayer.S_Batch_Player_Spatial => "RemotePlayer.S_Batch_Player_Spatial",
             Opcode.RemotePlayer.S_Left_Game => "RemotePlayer.S_Left_Game",
 
             // Entity

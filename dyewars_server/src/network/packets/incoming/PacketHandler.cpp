@@ -58,10 +58,8 @@ namespace PacketHandler {
                     Log::Warn("Turn packet too small from client {}", client_id);
                     return;
                 }
-                //uint8_t direction = data[1];
-                //uint8_t facing = data[2];
-                uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
-                Actions::Movement::Turn(server, client->GetClientID(), direction);
+                uint8_t facing = data[1];
+                Actions::Movement::Turn(server, client->GetClientID(), facing);
                 break;
             }
 
@@ -74,6 +72,22 @@ namespace PacketHandler {
             case Protocol::Opcode::Combat::C_Attack_Request: {
                 // TODO: Queue attack action
                 Log::Debug("Attack request from player {}", client_id);
+                break;
+            }
+
+            case Protocol::Opcode::Client::Connection::C_Pong_Response: {
+                // Client responded to our ping - calculate RTT
+                auto now = std::chrono::steady_clock::now();
+                auto rtt = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - client->ping_sent_time_
+                ).count();
+
+                // Clamp to reasonable values
+                if (rtt < 0) rtt = 0;
+                if (rtt > 5000) rtt = 5000;
+
+                client->RecordPing(static_cast<uint32_t>(rtt));
+                Log::Trace("Client {} ping: {}ms (avg: {}ms)", client_id, rtt, client->GetPing());
                 break;
             }
 

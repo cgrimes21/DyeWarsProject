@@ -133,9 +133,9 @@ public:
     /// BLOCKING / COLLISION
     /// ========================================================================
 
-    /// Check if a ~tile~ is walkable (in bounds + not blocked)
+    /// Check if a tile is blocked (out of bounds = blocked)
     bool IsTileBlocked(int16_t x, int16_t y) const {
-        if (!InBounds(x, y)) return false;
+        if (!InBounds(x, y)) return true;  // Out of bounds is blocked
         return blocking_[Index(x, y)];
     }
 

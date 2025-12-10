@@ -38,6 +38,11 @@ public:
     // State
     bool IsHandshakeComplete() const { return handshake_complete_; }
 
+    // Ping
+    void SendPing();
+    uint32_t GetPing() const { return avg_ping_ms_; }
+    void RecordPing(uint32_t ping_ms);
+
 private:
     // Packet Reading
     void ReadPacketHeader();
@@ -90,6 +95,17 @@ private:
 
     // Lenient wrong header strikes
     uint8_t protocol_violations_{0};
+
+public:
+    // Ping tracking (public for PacketHandler access)
+    std::chrono::steady_clock::time_point ping_sent_time_{};
+private:
+    // Ping averaging - keep last N samples
+    static constexpr size_t PING_SAMPLE_COUNT = 5;
+    uint32_t ping_samples_[PING_SAMPLE_COUNT]{0};
+    size_t ping_sample_index_{0};
+    size_t ping_sample_filled_{0};
+    uint32_t avg_ping_ms_{0};
 
     // Back Reference (non owning)
     GameServer *server_;

@@ -92,6 +92,35 @@ namespace DyeWars.Core
     }
 
     /// <summary>
+    /// Fired when server sends a batch update with remote player positions.
+    /// </summary>
+    public struct RemotePlayerUpdateEvent
+    {
+        public ulong PlayerId;
+        public Vector2Int Position;
+        public int Facing;
+    }
+
+    /// <summary>
+    /// Fired when server sends welcome packet with our player ID.
+    /// </summary>
+    public struct WelcomeReceivedEvent
+    {
+        public ulong PlayerId;
+        public Vector2Int Position;
+        public int Facing;
+    }
+
+    /// <summary>
+    /// Fired when server sends a pong response.
+    /// </summary>
+    public struct PongReceivedEvent
+    {
+        public uint Timestamp;
+        public uint LatencyMs;
+    }
+
+    /// <summary>
     /// Fired when local player starts moving (for animation).
     /// </summary>
     public struct LocalPlayerMoveStartedEvent
