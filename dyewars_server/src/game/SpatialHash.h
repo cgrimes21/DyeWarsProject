@@ -165,19 +165,36 @@ public:
 
     /// Get all entity pointers within range
     /// More convenient when you need actual entity data
+    /// Optimized: directly iterates cells without intermediate ID vector
     std::vector<std::shared_ptr<Player>> GetNearbyEntities(int16_t x,     // TODO: Could be uint16_t
                                                            int16_t y,     // TODO: Could be uint16_t
                                                            int16_t range) // TODO: Could be uint16_t
     const {
         std::vector<std::shared_ptr<Player>> result;
 
-        auto ids = GetNearbyIDs(x, y, range);
-        result.reserve(ids.size());
+        // Convert position to cell index
+        int32_t center_cx = x / CELL_SIZE;
+        int32_t center_cy = y / CELL_SIZE;
+        int32_t cells_radius = (range / CELL_SIZE) + 1;
 
-        for (uint64_t id: ids) {
-            auto it = entity_ptrs_.find(id);
-            if (it != entity_ptrs_.end() && it->second) {
-                result.push_back(it->second);
+        // Check all cells in the square region around the center cell
+        for (int32_t dcx = -cells_radius; dcx <= cells_radius; dcx++) {
+            for (int32_t dcy = -cells_radius; dcy <= cells_radius; dcy++) {
+                int32_t cx = center_cx + dcx;
+                int32_t cy = center_cy + dcy;
+
+                if (cx < 0 || cy < 0) continue;
+
+                int64_t key = MakeCellKey(cx, cy);
+                auto cell_it = cells_.find(key);
+                if (cell_it != cells_.end()) {
+                    for (uint64_t id : cell_it->second) {
+                        auto ptr_it = entity_ptrs_.find(id);
+                        if (ptr_it != entity_ptrs_.end() && ptr_it->second) {
+                            result.push_back(ptr_it->second);
+                        }
+                    }
+                }
             }
         }
         return result;

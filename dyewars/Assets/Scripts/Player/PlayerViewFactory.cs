@@ -167,7 +167,7 @@ namespace DyeWars.Player
             var view = playerObj.GetComponent<PlayerView>();
             if (view != null)
             {
-                view.InitializeAsRemotePlayer(playerId, this);
+                view.InitializeAsRemotePlayer(playerId);
                 view.SetFacing(facing);
             }
 

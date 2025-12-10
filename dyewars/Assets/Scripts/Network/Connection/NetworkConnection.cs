@@ -195,9 +195,8 @@ namespace DyeWars.Network.Connection
             {
                 try
                 {
-                    // Read packet header
-                    int bytesRead = stream.Read(headerBuffer, 0, PacketHeader.HeaderSize);
-                    if (bytesRead != PacketHeader.HeaderSize)
+                    // Read packet header (must read all bytes - TCP may fragment)
+                    if (!ReadExact(headerBuffer, 0, PacketHeader.HeaderSize))
                     {
                         Debug.LogError("NetworkConnection: Failed to read header");
                         break;
@@ -213,17 +212,23 @@ namespace DyeWars.Network.Connection
                     // Read payload size
                     ushort payloadSize = PacketHeader.ReadPayloadSize(headerBuffer);
 
-                    if (payloadSize > 0 && payloadSize < 4096)
+                    if (payloadSize > 0 && payloadSize <= PacketHeader.MaxIncomingPayload)
                     {
-                        // Read payload
+                        // Read payload (must read all bytes - TCP may fragment)
                         byte[] payload = new byte[payloadSize];
-                        bytesRead = stream.Read(payload, 0, payloadSize);
-
-                        if (bytesRead == payloadSize)
+                        if (!ReadExact(payload, 0, payloadSize))
                         {
-                            // Notify listeners (still on background thread!)
-                            OnPacketReceived?.Invoke(payload);
+                            Debug.LogError("NetworkConnection: Failed to read payload");
+                            break;
                         }
+
+                        // Notify listeners (still on background thread!)
+                        OnPacketReceived?.Invoke(payload);
+                    }
+                    else if (payloadSize > PacketHeader.MaxIncomingPayload)
+                    {
+                        Debug.LogError($"NetworkConnection: Payload too large ({payloadSize} bytes, max {PacketHeader.MaxIncomingPayload})");
+                        break;
                     }
                 }
                 catch (Exception e)
@@ -238,6 +243,26 @@ namespace DyeWars.Network.Connection
 
             isConnected = false;
             OnDisconnected?.Invoke("Connection lost");
+        }
+
+        /// <summary>
+        /// Read exactly 'count' bytes from the stream. TCP may fragment data,
+        /// so a single Read() call might not return all requested bytes.
+        /// </summary>
+        private bool ReadExact(byte[] buffer, int offset, int count)
+        {
+            int totalRead = 0;
+            while (totalRead < count)
+            {
+                int bytesRead = stream.Read(buffer, offset + totalRead, count - totalRead);
+                if (bytesRead == 0)
+                {
+                    // Connection closed
+                    return false;
+                }
+                totalRead += bytesRead;
+            }
+            return true;
         }
     }
 }

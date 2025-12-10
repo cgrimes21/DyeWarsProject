@@ -143,7 +143,7 @@ namespace DyeWars.Network.Protocol
         {
             /// <summary>
             /// Welcome packet with player ID and initial state.
-            /// Payload: [playerId:4][x:2][y:2][facing:1]
+            /// Payload: [playerId:8][x:2][y:2][facing:1]
             /// </summary>
             public const byte S_Welcome = 0x10;
 
@@ -246,31 +246,31 @@ namespace DyeWars.Network.Protocol
         {
             /// <summary>
             /// Player entered visible range.
-            /// Payload: [playerId:4][x:2][y:2][facing:1][appearanceData:variable]
+            /// Payload: [playerId:8][x:2][y:2][facing:1][appearanceData:variable]
             /// </summary>
             public const byte S_Entered_Range = 0x20;
 
             /// <summary>
             /// Player left visible range.
-            /// Payload: [playerId:4]
+            /// Payload: [playerId:8]
             /// </summary>
             public const byte S_Left_Range = 0x21;
 
             /// <summary>
             /// Player appearance changed.
-            /// Payload: [playerId:4][appearanceData:variable]
+            /// Payload: [playerId:8][appearanceData:variable]
             /// </summary>
             public const byte S_Appearance_Changed = 0x22;
 
             /// <summary>
             /// Player died.
-            /// Payload: [playerId:4]
+            /// Payload: [playerId:8]
             /// </summary>
             public const byte S_Died = 0x23;
 
             /// <summary>
             /// Player respawned.
-            /// Payload: [playerId:4][x:2][y:2]
+            /// Payload: [playerId:8][x:2][y:2]
             /// </summary>
             public const byte S_Respawned = 0x24;
 
@@ -282,7 +282,7 @@ namespace DyeWars.Network.Protocol
 
             /// <summary>
             /// Player left the game.
-            /// Payload: [playerId:4]
+            /// Payload: [playerId:8]
             /// </summary>
             public const byte S_Left_Game = 0x26;
         }
@@ -342,7 +342,7 @@ namespace DyeWars.Network.Protocol
         {
             /// <summary>
             /// Batch remote player positions.
-            /// Payload: [count:1][[playerId:4][x:2][y:2][facing:1]]...
+            /// Payload: [count:1][[playerId:8][x:2][y:2][facing:1]]...
             /// </summary>
             public const byte S_RemotePlayer_Update = 0x27;
 
@@ -624,7 +624,7 @@ namespace DyeWars.Network.Protocol
         public const int C_Movement_Interact_Request = 1;           // opcode only
 
         // LocalPlayer
-        public const int S_LocalPlayer_Welcome = 10;                // opcode + id(4) + x(2) + y(2) + facing
+        public const int S_LocalPlayer_Welcome = 14;                // opcode + id(8) + x(2) + y(2) + facing
         public const int S_LocalPlayer_Position_Correction = 6;     // opcode + x(2) + y(2) + facing
         public const int S_LocalPlayer_Facing_Correction = 2;       // opcode + facing
         public const int S_LocalPlayer_Stats_Update = 9;            // opcode + hp(2) + maxHp(2) + mp(2) + maxMp(2)
@@ -643,10 +643,10 @@ namespace DyeWars.Network.Protocol
         public const int S_Map_Collision_Data_Header = 7;           // opcode + originX(2) + originY(2) + width + height
 
         // RemotePlayer
-        public const int S_RemotePlayer_Left_Range = 5;             // opcode + id(4)
-        public const int S_RemotePlayer_Died = 5;                   // opcode + id(4)
-        public const int S_RemotePlayer_Respawned = 9;              // opcode + id(4) + x(2) + y(2)
-        public const int S_RemotePlayer_Left_Game = 5;              // opcode + id(4)
+        public const int S_RemotePlayer_Left_Range = 9;             // opcode + id(8)
+        public const int S_RemotePlayer_Died = 9;                   // opcode + id(8)
+        public const int S_RemotePlayer_Respawned = 13;             // opcode + id(8) + x(2) + y(2)
+        public const int S_RemotePlayer_Left_Game = 9;              // opcode + id(8)
 
         // Entity
         public const int S_Entity_Entered_Range = 13;               // opcode + id(4) + type + x(2) + y(2) + facing + appearanceId(2)
@@ -659,7 +659,7 @@ namespace DyeWars.Network.Protocol
 
         // Batch
         public const int S_Batch_RemotePlayer_Update_Header = 2;    // opcode + count
-        public const int S_Batch_RemotePlayer_Update_PerPlayer = 9; // id(4) + x(2) + y(2) + facing
+        public const int S_Batch_RemotePlayer_Update_PerPlayer = 13; // id(8) + x(2) + y(2) + facing
         public const int S_Batch_Entity_Update_Header = 2;          // opcode + count
         public const int S_Batch_Entity_Update_PerEntity = 9;       // id(4) + x(2) + y(2) + facing
 

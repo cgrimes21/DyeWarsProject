@@ -16,7 +16,8 @@ public:
     void RecordOutgoing(size_t bytes) {
         total_bytes_out_.fetch_add(bytes, std::memory_order_relaxed);
         bytes_this_second_.fetch_add(bytes, std::memory_order_relaxed);
-        packets_this_second_.fetch_add(bytes, std::memory_order_relaxed);
+        // BUG FIX: Was adding `bytes` instead of 1 - packet counter was growing by megabytes!
+        packets_this_second_.fetch_add(1, std::memory_order_relaxed);
     }
 
     void RecordIncoming(size_t bytes) {

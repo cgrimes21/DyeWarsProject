@@ -40,44 +40,49 @@ void ClientConnection::Start() {
 }
 
 void ClientConnection::Disconnect(const std::string &reason) {
-    // Prevent double-disconnect from concurrent calls
+    // Prevent double-disconnect from concurrent calls.
+    // compare_exchange_strong atomically:
+    //   1. Checks if disconnecting_ == expected (false)
+    //   2. If yes, sets disconnecting_ = true and returns true
+    //   3. If no, returns false (another thread already set it)
+    // This ensures only ONE thread runs the disconnect logic.
     bool expected = false;
     if (!disconnecting_.compare_exchange_strong(expected, true)) {
         return;
     }
 
-    // Keep ourselves alive for the duration of this function
+    // Keep ourselves alive for the duration of this function.
+    // shared_from_this() creates a new shared_ptr that shares ownership.
+    // This prevents the destructor from running while we're still in this function,
+    // even if all other references are removed during cleanup.
     auto self = shared_from_this();
 
-    // Capture these before any cleanup since we need them for logging
+    // Capture these before any cleanup since we need them for logging.
+    // After OnClientDisconnect runs, the client_id_ may be accessed by
+    // other threads, so we capture our own copies here.
     const auto id = client_id_;
     const auto ip = client_ip_;
-
 
     if (!reason.empty()) {
         Log::Debug("Client {} disconnecting because: {}", client_id_, reason);
     }
 
-    // Close any pending I/O
+    // Close any pending I/O immediately.
+    // This stops the async read chain and prevents new packets from being processed.
     handshake_timer_.cancel();
     CloseSocket();
 
-    // These are deleting refs to the shared pointer of our ClientConnection.
-    // They will call the destructor at the end here, or somewhere in between.
-    // Do we hold one last shared_ptr open while we're clearing? Yes
-    // We use auto self = shared from this above
-
-    // Each cleanup is independent - don't let one failure stop the others
-    // These functions are silent no-ops but mutex or Log could throw still
-    // Highly unlikely but it would throw off the state of the server
-    try { server_->Players().RemoveByClientID(id); }
-    catch (const std::exception &e) { Log::Error("Failed to remove player {}: {}", id, e.what()); }
-
-    try { server_->Clients().RemoveClient(id); }
-    catch (const std::exception &e) { Log::Error("Failed to remove client {}: {}", id, e.what()); }
-
-    try { server_->Limiter().RemoveConnection(ip); }
-    catch (const std::exception &e) { Log::Error("Failed to remove limiter {}: {}", ip, e.what()); }
+    // IMPORTANT: All state cleanup (player removal, client removal, limiter update)
+    // is now handled by OnClientDisconnect, which queues the work on the game thread.
+    //
+    // Why not clean up here directly? RACE CONDITION:
+    //   - This Disconnect() runs on the IO thread
+    //   - Game logic runs on the game thread
+    //   - If we remove player here while game thread is iterating players = crash
+    //
+    // By queuing via OnClientDisconnect, all modifications happen on ONE thread
+    // (the game thread), eliminating the race.
+    server_->OnClientDisconnect(id, ip);
 
     Log::Info("Client {} IP: {} disconnected.", id, ip);
 }
@@ -267,13 +272,35 @@ void ClientConnection::CompleteHandshake() {
 }
 
 void ClientConnection::FailHandshake(const std::string &reason) {
+    // Use the same atomic guard as Disconnect to prevent double-cleanup.
+    // This is important because:
+    //   1. Handshake timeout could fire WHILE we're processing an invalid packet
+    //   2. Both code paths would try to clean up the limiter
+    //   3. Double RemoveConnection corrupts the connection count
+    bool expected = false;
+    if (!disconnecting_.compare_exchange_strong(expected, true)) {
+        return;  // Another code path is already handling cleanup
+    }
+
     Log::Warn("IP: {} Hostname: {} handshake failed because: {}.", client_ip_, client_hostname_, reason);
+
+    // Record the failure for rate limiting (too many failures = temp ban)
     server_->Limiter().RecordFailure(client_ip_);
+
+    // Remove from limiter's connection count.
+    // This is safe to do here (not via OnClientDisconnect) because:
+    // - The player was never created (handshake failed)
+    // - No game state to clean up, just the connection count
     server_->Limiter().RemoveConnection(client_ip_);
+
     LogFailedConnection(reason);
     handshake_timer_.cancel();
     CloseSocket();
-    //Disconnect(reason);
+
+    // Note: We don't call OnClientDisconnect because:
+    // - No player was ever created (handshake failed before login)
+    // - No entry in PlayerRegistry or ClientManager
+    // - Only the Limiter needs updating, which we did above
 }
 
 /// =============================\n
@@ -335,26 +362,14 @@ void ClientConnection::SendPing() {
     );
 
     Protocol::Packet pkt;
-    Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Server::Connection::S_Ping_Request);
+    Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Server::Connection::S_Ping_Request.op);
     Protocol::PacketWriter::WriteUInt(pkt.payload, timestamp);
     pkt.size = static_cast<uint16_t>(pkt.payload.size());
     SendPacket(pkt);
 }
 
 void ClientConnection::RecordPing(uint32_t ping_ms) {
-    // Store in circular buffer
-    ping_samples_[ping_sample_index_] = ping_ms;
-    ping_sample_index_ = (ping_sample_index_ + 1) % PING_SAMPLE_COUNT;
-    if (ping_sample_filled_ < PING_SAMPLE_COUNT) {
-        ping_sample_filled_++;
-    }
-
-    // Calculate average
-    uint32_t sum = 0;
-    for (size_t i = 0; i < ping_sample_filled_; i++) {
-        sum += ping_samples_[i];
-    }
-    avg_ping_ms_ = sum / static_cast<uint32_t>(ping_sample_filled_);
+    ping_.Record(ping_ms);
 }
 
 // --- SENDING FUNCTIONS ---

@@ -19,7 +19,7 @@ namespace Packets::PacketSender {
             const std::shared_ptr<Player> &player
     ) {
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Welcome);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Welcome.op);
         Protocol::PacketWriter::WriteUInt64(pkt.payload, player->GetID());
         Protocol::PacketWriter::WriteShort(pkt.payload, player->GetX());
         Protocol::PacketWriter::WriteShort(pkt.payload, player->GetY());
@@ -39,7 +39,7 @@ namespace Packets::PacketSender {
         if (players.empty()) return;
 
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Batch::S_Player_Spatial);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Batch::S_Player_Spatial.op);
         Protocol::PacketWriter::WriteByte(pkt.payload, 0); // Placeholder for count
 
         uint8_t count = 0;
@@ -69,7 +69,7 @@ namespace Packets::PacketSender {
             const uint8_t facing
     ) {
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Batch::S_Player_Spatial);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::Batch::S_Player_Spatial.op);
         Protocol::PacketWriter::WriteByte(pkt.payload, 1);  // Count = 1
         Protocol::PacketWriter::WriteUInt64(pkt.payload, player_id);
         Protocol::PacketWriter::WriteShort(pkt.payload, static_cast<uint16_t>(x));
@@ -87,7 +87,7 @@ namespace Packets::PacketSender {
             const int16_t y,
             const uint8_t facing) {
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Position_Correction);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Position_Correction.op);
         Protocol::PacketWriter::WriteShort(pkt.payload, static_cast<uint16_t>(x));
         Protocol::PacketWriter::WriteShort(pkt.payload, static_cast<uint16_t>(y));
         Protocol::PacketWriter::WriteByte(pkt.payload, facing);
@@ -101,7 +101,7 @@ namespace Packets::PacketSender {
             const std::shared_ptr<ClientConnection> &client,
             const uint8_t facing) {
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Facing_Correction);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::LocalPlayer::S_Facing_Correction.op);
         Protocol::PacketWriter::WriteByte(pkt.payload, facing);
         pkt.size = static_cast<uint16_t>(pkt.payload.size());
         client->SendPacket(pkt);
@@ -113,7 +113,7 @@ namespace Packets::PacketSender {
             const std::shared_ptr<ClientConnection> &client,
             const uint64_t player_id) {
         Protocol::Packet pkt;
-        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::RemotePlayer::S_Left_Game);
+        Protocol::PacketWriter::WriteByte(pkt.payload, Protocol::Opcode::RemotePlayer::S_Left_Game.op);
         Protocol::PacketWriter::WriteUInt64(pkt.payload, player_id);
         pkt.size = static_cast<uint16_t>(pkt.payload.size());
         client->SendPacket(pkt);

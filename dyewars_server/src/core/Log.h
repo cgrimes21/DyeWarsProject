@@ -2,9 +2,13 @@
 
 #include <iostream>
 #include <format>
+#include <atomic>
 
 namespace Log {
-    inline int Level = 1;
+    // Atomic because Level can be changed from main thread (console command "debug")
+    // while being read from IO thread and game thread simultaneously.
+    // Without atomic, this is a data race (undefined behavior).
+    inline std::atomic<int> Level{1};
 
     namespace Color {
         constexpr const char *Reset = "\033[0m";

@@ -44,7 +44,7 @@ public:
     /// ========================================================================
 
     /// Create a new player for a client connection
-    /// Returns the created player (never null)
+    /// Returns the created player, or nullptr if client already has a player
     std::shared_ptr<Player> CreatePlayer(
             uint64_t client_id,
             uint16_t start_x,
@@ -62,9 +62,23 @@ public:
         player->SetClientID(client_id);
 
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard lock(mutex_);
+
+            // Check if this client already has a player.
+            // This shouldn't happen in normal operation, but could if:
+            // - A bug calls CreatePlayer twice for the same client
+            // - A race condition in login handling
+            // Without this check, we'd overwrite the old player mapping,
+            // orphaning the old player in memory (leak) and breaking lookups.
+            if (client_to_player_.contains(client_id)) {
+                Log::Error("CreatePlayer: client {} already has player {}",
+                           client_id, client_to_player_[client_id]);
+                return nullptr;
+            }
+
             players_[player_id] = player;
             client_to_player_[client_id] = player_id;
+            player_to_client_[player_id] = client_id;  // Reverse mapping for O(1) lookup
         }
 
         Log::Trace("Player {} created for client {}", player_id, client_id);
@@ -72,14 +86,14 @@ public:
     }
 
     void RemovePlayer(uint64_t player_id) {
+        {
+            std::lock_guard lock(mutex_);
 
-        {// Find and remove client mapping
-            std::lock_guard<std::mutex> lock(mutex_);
-            for (auto it = client_to_player_.begin(); it != client_to_player_.end(); it++) {
-                if (it->second == player_id) {
-                    client_to_player_.erase(it);
-                    break;
-                }
+            // O(1) reverse lookup to find client_id
+            auto client_it = player_to_client_.find(player_id);
+            if (client_it != player_to_client_.end()) {
+                client_to_player_.erase(client_it->second);
+                player_to_client_.erase(client_it);
             }
 
             // Remove from dirty set if present
@@ -95,8 +109,7 @@ public:
     /// Remove a player by client ID
     void RemoveByClientID(uint64_t client_id) {
         {
-
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard lock(mutex_);
 
             auto it = client_to_player_.find(client_id);
             if (it != client_to_player_.end()) {
@@ -109,6 +122,8 @@ public:
                     players_.erase(player_it);
                 }
 
+                // Remove both mappings
+                player_to_client_.erase(player_id);
                 client_to_player_.erase(it);
                 Log::Info("Player {} removed (by client {})", player_id, client_id);
             }
@@ -127,14 +142,14 @@ public:
 
     /// Get player by player ID
     std::shared_ptr<Player> GetByID(uint64_t player_id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         auto it = players_.find(player_id);
         return (it != players_.end()) ? it->second : nullptr;
     }
 
     /// Get player by client ID
     std::shared_ptr<Player> GetByClientID(uint64_t client_id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
 
         auto it = client_to_player_.find(client_id);
         if (it == client_to_player_.end()) return nullptr;
@@ -146,7 +161,7 @@ public:
     /// Get player ID for a client connection
     /// Returns 0 if not found
     uint64_t GetPlayerIDForClient(uint64_t client_id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         auto it = client_to_player_.find(client_id);
         return (it != client_to_player_.end()) ? it->second : 0;
     }
@@ -158,21 +173,22 @@ public:
     /// Mark a player as dirty (needs broadcast)
     /// Thread-safe - can be called from game thread
     void MarkDirty(const std::shared_ptr<Player> &player) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         dirty_players_.insert(player);
     }
 
     /// Mark a player as dirty by ID
     void MarkDirty(uint64_t player_id) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         auto it = players_.find(player_id);
         if (it != players_.end()) {
             dirty_players_.insert(it->second);
         }
     }
 
-
+    /// Consume and return all dirty players (clears the set)
     std::vector<std::shared_ptr<Player>> ConsumeDirtyPlayers() {
+        std::lock_guard lock(mutex_);
         std::vector<std::shared_ptr<Player>> result(dirty_players_.begin(), dirty_players_.end());
         dirty_players_.clear();
         return result;
@@ -180,7 +196,7 @@ public:
 
     /// Check if there are dirty players
     bool HasDirtyPlayers() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         return !dirty_players_.empty();
     }
 
@@ -190,7 +206,7 @@ public:
 
     /// Get all players (copy of shared_ptrs)
     std::vector<std::shared_ptr<Player>> GetAllPlayers() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         std::vector<std::shared_ptr<Player>> result;
         result.reserve(players_.size());
         for (const auto &[id, player]: players_) {
@@ -201,7 +217,7 @@ public:
 
     /// Get player count
     size_t Count() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
         return players_.size();
     }
 
@@ -210,11 +226,11 @@ public:
     /// ========================================================================
 
     /// Iterate over all players
-    /// Note: Holds lock during iteration - keep callback fast!
+    /// Takes a snapshot under lock, then iterates without holding lock
     void ForEachPlayer(const std::function<void(const std::shared_ptr<Player> &)> &func) {
         std::vector<std::shared_ptr<Player>> snapshot;
         {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard lock(mutex_);
             snapshot.reserve(players_.size());
             for (const auto &[id, player]: players_) {
                 snapshot.push_back(player);
@@ -232,7 +248,7 @@ private:
 
     /// Generate a unique player ID
     uint64_t GenerateUniqueID() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard lock(mutex_);
 
         for (int attempts = 0; attempts < 100; attempts++) {
             uint64_t id = id_dist_(rng_);
@@ -240,7 +256,6 @@ private:
                 return id;
             }
         }
-
 
         // Fallback: find next available sequential ID
         for (int attempts = 0; attempts < 100; attempts++) {
@@ -263,11 +278,14 @@ private:
     /// Client mapping: client_id -> player_id
     std::unordered_map<uint64_t, uint64_t> client_to_player_;
 
+    /// Reverse mapping: player_id -> client_id (for O(1) removal by player_id)
+    std::unordered_map<uint64_t, uint64_t> player_to_client_;
+
     /// Dirty players: need broadcast this tick
     std::unordered_set<std::shared_ptr<Player>> dirty_players_;
 
     /// Thread safety
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
 
     /// ID generation
     std::mt19937_64 rng_{std::random_device{}()};

@@ -14,6 +14,7 @@
 using UnityEngine;
 using DyeWars.Network.Protocol;
 using DyeWars.Core;
+using System;
 
 namespace DyeWars.Network.Inbound
 {
@@ -47,25 +48,21 @@ namespace DyeWars.Network.Inbound
                     HandleLocalFacingCorrection(payload, offset);
                     break;
 
-                // TODO Merge this to batchupdate
-                //case Opcode.Batch.S_RemotePlayer_Update:
-                //    HandleOtherPlayerUpdate(payload, offset);
-                //    break;
+                case Opcode.Batch.S_RemotePlayer_Update:
+                    HandleBatchUpdate(payload, offset);
+                    break;
 
                 case Opcode.RemotePlayer.S_Left_Game:
                     HandlePlayerLeft(payload, offset);
-                    break;
-
-                case Opcode.Batch.S_RemotePlayer_Update:
-                    HandleBatchUpdate(payload, offset);
                     break;
 
                 case Opcode.RemotePlayer.S_Batch_Player_Spatial:
                     HandleBatchPlayerSpatial(payload, offset);
                     break;
 
-                case Opcode.Connection.S_Pong_Response:
-                    HandlePong(payload, offset);
+                case Opcode.Connection.S_Ping_Request:
+                    // Ping request from server - respond with pong
+                    HandleServerPingRequest(payload, offset);
                     break;
 
                 case Opcode.System.S_Kick_Notification:
@@ -77,6 +74,7 @@ namespace DyeWars.Network.Inbound
                     break;
             }
         }
+
 
         // ========================================================================
         // LOCAL PLAYER HANDLERS
@@ -162,73 +160,17 @@ namespace DyeWars.Network.Inbound
         }
 
         // ========================================================================
-        // COMBAT HANDLERS (stubs for future implementation)
-        // ========================================================================
-
-        private void HandlePlayEffect(byte[] payload, int offset)
-        {
-            if (!PacketReader.HasBytes(payload, offset, 5)) return; // 2+2+2+1 = 7, minus opcode = 6... let's say 5 minimum
-
-            ushort effectId = PacketReader.ReadU16(payload, ref offset);
-            int x = PacketReader.ReadU16(payload, ref offset);
-            int y = PacketReader.ReadU16(payload, ref offset);
-            byte param = PacketReader.ReadU8(payload, ref offset);
-
-            // TODO: Publish effect event when combat system is implemented
-            Debug.Log($"PacketHandler: Effect {effectId} at ({x}, {y}) param={param}");
-        }
-
-        private void HandleDamage(byte[] payload, int offset)
-        {
-            if (!PacketReader.HasBytes(payload, offset, 10)) return; // 4+2+2+2
-
-            ulong playerId = PacketReader.ReadU64(payload, ref offset);
-            ushort damage = PacketReader.ReadU16(payload, ref offset);
-            ushort currentHp = PacketReader.ReadU16(payload, ref offset);
-            ushort maxHp = PacketReader.ReadU16(payload, ref offset);
-
-            // TODO: Publish damage event when combat system is implemented
-            Debug.Log($"PacketHandler: Player {playerId} took {damage} damage ({currentHp}/{maxHp})");
-        }
-
-        private void HandleHeal(byte[] payload, int offset)
-        {
-            if (!PacketReader.HasBytes(payload, offset, 10)) return;
-
-            ulong playerId = PacketReader.ReadU64(payload, ref offset);
-            ushort amount = PacketReader.ReadU16(payload, ref offset);
-            ushort currentHp = PacketReader.ReadU16(payload, ref offset);
-            ushort maxHp = PacketReader.ReadU16(payload, ref offset);
-
-            // TODO: Publish heal event when combat system is implemented
-            Debug.Log($"PacketHandler: Player {playerId} healed {amount} ({currentHp}/{maxHp})");
-        }
-
-        private void HandleDeath(byte[] payload, int offset)
-        {
-            if (!PacketReader.HasBytes(payload, offset, 4)) return;
-
-            ulong playerId = PacketReader.ReadU64(payload, ref offset);
-
-            // TODO: Publish death event when combat system is implemented
-            Debug.Log($"PacketHandler: Player {playerId} died");
-        }
-
-        private void HandleRespawn(byte[] payload, int offset)
-        {
-            if (!PacketReader.HasBytes(payload, offset, 8)) return; // 4+2+2
-
-            ulong playerId = PacketReader.ReadU64(payload, ref offset);
-            int x = PacketReader.ReadU16(payload, ref offset);
-            int y = PacketReader.ReadU16(payload, ref offset);
-
-            // TODO: Publish respawn event when combat system is implemented
-            Debug.Log($"PacketHandler: Player {playerId} respawned at ({x}, {y})");
-        }
-
-        // ========================================================================
         // SYSTEM HANDLERS
         // ========================================================================
+
+        private void HandleServerPingRequest(byte[] payload, int offset)
+        {
+            if (!PacketReader.HasBytes(payload, offset, 4)) return;
+            uint timestamp = PacketReader.ReadU32(payload, ref offset);
+            // Echo back immediately
+            var networkService = ServiceLocator.Get<INetworkService>();
+            networkService?.Sender.SendPongResponse(timestamp);
+        }
 
         private void HandlePong(byte[] payload, int offset)
         {
@@ -240,21 +182,9 @@ namespace DyeWars.Network.Inbound
 
         private void HandleKick(byte[] payload, int offset)
         {
-            string reason = "Unknown";
-            if (PacketReader.HasBytes(payload, offset, 1))
-            {
-                byte reasonLength = PacketReader.ReadU8(payload, ref offset);
-                if (PacketReader.HasBytes(payload, offset, reasonLength))
-                {
-                    byte[] reasonBytes = new byte[reasonLength];
-                    for (int i = 0; i < reasonLength; i++)
-                        reasonBytes[i] = PacketReader.ReadU8(payload, ref offset);
-                    reason = System.Text.Encoding.UTF8.GetString(reasonBytes);
-                }
-            }
+            string reason = PacketReader.ReadString(payload, ref offset) ?? "Unknown";
             Debug.LogWarning("PacketHandler: Kicked - " + reason);
-            //TODO fix this publish source
-            EventBus.Publish(new Core.DisconnectedFromServerEvent { Reason = reason });
+            EventBus.Publish(new DisconnectedFromServerEvent { Reason = reason });
         }
     }
 }

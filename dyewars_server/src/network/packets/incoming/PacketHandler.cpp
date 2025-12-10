@@ -13,7 +13,7 @@
 namespace PacketHandler {
     void Handle(
             const std::shared_ptr<ClientConnection> &client,
-            const vector<uint8_t> &data,
+            const std::vector<uint8_t> &data,
             GameServer *server
     ) {
         if (data.empty()) return;
@@ -37,25 +37,24 @@ namespace PacketHandler {
         switch (opcode)
             //uint8_t opcode = Protocol::PacketReader::ReadByte(data, offset))
         {
-            case Protocol::Opcode::Movement::C_Move_Request: {
-
-                // if (data.size() != Protocol::Opcode::Movement::C_Move_Request.size) {
-                //     Log::Warn("Packet size doesn't equal expected op code requirement: Line {}", __LINE__);
-                //     return;
-                // }
+            case Protocol::Opcode::Movement::C_Move_Request.op: {
+                if (data.size() != Protocol::Opcode::Movement::C_Move_Request.payloadSize) {
+                    Log::Warn("Move packet size mismatch from client {} (got {}, expected {})",
+                              client_id, data.size(), Protocol::Opcode::Movement::C_Move_Request.payloadSize);
+                    return;
+                }
                 const uint8_t direction = data[1];
-                const uint8_t facing = data[1];
-//                const uint8_t direction = Protocol::PacketReader::ReadByte(data, offset);
-//                const uint8_t facing = Protocol::PacketReader::ReadByte(data, offset);
+                const uint8_t facing = data[2];
 
                 // Queue the action - will be processed in game loop
                 Actions::Movement::Move(server, client->GetClientID(), direction, facing);
                 break;
             }
 
-            case Protocol::Opcode::Movement::C_Turn_Request: {
-                if (data.size() < 2) {
-                    Log::Warn("Turn packet too small from client {}", client_id);
+            case Protocol::Opcode::Movement::C_Turn_Request.op: {
+                if (data.size() != Protocol::Opcode::Movement::C_Turn_Request.payloadSize) {
+                    Log::Warn("Turn packet size mismatch from client {} (got {}, expected {})",
+                              client_id, data.size(), Protocol::Opcode::Movement::C_Turn_Request.payloadSize);
                     return;
                 }
                 uint8_t facing = data[1];
@@ -63,19 +62,19 @@ namespace PacketHandler {
                 break;
             }
 
-            case Protocol::Opcode::Movement::C_Interact_Request: {
+            case Protocol::Opcode::Movement::C_Interact_Request.op: {
                 // TODO: Queue interact action
                 Log::Debug("Interact request from player {}", client_id);
                 break;
             }
 
-            case Protocol::Opcode::Combat::C_Attack_Request: {
+            case Protocol::Opcode::Combat::C_Attack_Request.op: {
                 // TODO: Queue attack action
                 Log::Debug("Attack request from player {}", client_id);
                 break;
             }
 
-            case Protocol::Opcode::Client::Connection::C_Pong_Response: {
+            case Protocol::Opcode::Client::Connection::C_Pong_Response.op: {
                 // Client responded to our ping - calculate RTT
                 auto now = std::chrono::steady_clock::now();
                 auto rtt = std::chrono::duration_cast<std::chrono::milliseconds>(

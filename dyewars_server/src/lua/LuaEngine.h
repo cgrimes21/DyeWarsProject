@@ -14,7 +14,7 @@ public:
 
     ~LuaGameEngine();
 
-    void OnPlayerMoved(uint32_t player_id, int x, int y, uint8_t facing);
+    void OnPlayerMoved(uint64_t player_id, int x, int y, uint8_t facing);
 
     bool ProcessMove(int &x, int &y, uint8_t direction);
 

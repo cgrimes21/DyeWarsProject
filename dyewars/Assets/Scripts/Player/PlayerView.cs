@@ -65,7 +65,7 @@ namespace DyeWars.Player
             UpdateSprites(currentFacing, 0);
         }
 
-        public void InitializeAsRemotePlayer(ulong playerId, PlayerViewFactory factory)
+        public void InitializeAsRemotePlayer(ulong playerId)
         {
             isLocalPlayer = false;
             trackedPlayerId = playerId;

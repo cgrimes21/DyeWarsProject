@@ -5,7 +5,11 @@
 #include <string>
 #include <vector>
 
-using std::vector;
+// REMOVED: "using std::vector;" was here
+// WHY: "using" directives in headers pollute the global namespace for EVERY file
+// that includes this header. If another file defines its own "vector" class or
+// uses a different library with a vector type, you get name collisions.
+// Rule: Never put "using" in headers. Always use fully-qualified names (std::vector).
 
 // ============================================================================
 // PROTOCOL CONSTANTS - The ONE place for all protocol definitions
@@ -35,10 +39,10 @@ namespace Protocol {
     struct Packet {
         uint8_t header[2] = {Protocol::MAGIC_1, Protocol::MAGIC_2};
         uint16_t size;
-        vector<uint8_t> payload;
+        std::vector<uint8_t> payload;
 
-        vector<uint8_t> ToBytes() const {
-            vector<uint8_t> bytes;
+        std::vector<uint8_t> ToBytes() const {
+            std::vector<uint8_t> bytes;
             bytes.reserve(4 + payload.size());
             bytes.push_back(header[0]);
             bytes.push_back(header[1]);
@@ -92,14 +96,18 @@ namespace Protocol {
 
     namespace PacketReader {
         inline uint8_t ReadByte(const std::vector<uint8_t> &buffer, size_t &offset) {
-            if (offset + 1 > buffer.size()) {
+            // BOUNDS CHECK: Use subtraction instead of addition to prevent overflow.
+            // If offset is SIZE_MAX, "offset + 1" wraps to 0, bypassing the check!
+            // "buffer.size() - offset < 1" is safe because we check offset <= size first.
+            if (offset >= buffer.size()) {
                 throw std::out_of_range("Buffer too small for ReadByte");
             }
             return buffer[offset++];
         }
 
         inline uint16_t ReadShort(const std::vector<uint8_t> &buffer, size_t &offset) {
-            if (offset + 2 > buffer.size()) {
+            // Check if there's room for 2 bytes without overflow
+            if (offset > buffer.size() || buffer.size() - offset < 2) {
                 throw std::out_of_range("Buffer too small for ReadShort");
             }
             // CHANGE: Added static_cast<uint16_t>
@@ -116,7 +124,8 @@ namespace Protocol {
         }
 
         inline uint32_t ReadUInt(const std::vector<uint8_t> &buffer, size_t &offset) {
-            if (offset + 4 > buffer.size()) {
+            // Check if there's room for 4 bytes without overflow
+            if (offset > buffer.size() || buffer.size() - offset < 4) {
                 throw std::out_of_range("Buffer too small for ReadUInt");
             }
             // CHANGE: Cast BEFORE shifting, not after
@@ -150,7 +159,8 @@ namespace Protocol {
         }
 
         inline uint64_t ReadUInt64(const std::vector<uint8_t> &buffer, size_t &offset) {
-            if (offset + 8 > buffer.size()) {
+            // Check if there's room for 8 bytes without overflow
+            if (offset > buffer.size() || buffer.size() - offset < 8) {
                 throw std::out_of_range("Buffer too small for ReadUInt64");
             }
             // WHY static_cast on every byte: Without it, uint8_t promotes to int.

@@ -220,105 +220,6 @@ void GameServer::ProcessTick() {
     }
 }
 
-/*
-    // Broadcast updates to all clients
-    for (const auto &player: dirty_players) {
-        uint64_t player_id = player->GetID();
-        int16_t x = player->GetX();
-        int16_t y = player->GetY();
-        uint8_t facing = player->GetFacing();
-
-        * I want to send a batch update here similar to the commented out code below
-         * thing is, anything about the player could have changed. do I send one large batch or
-         * movement batch
-         * status batch
-         * appearance batch
-         *
-         * and how would I know what batch to send? switch player->is_movement_dirty?
-         *
-        clients_.BroadcastToAll([=](const auto& conn) {
-            Packets::Send::PlayerUpdate(conn, player_id, x, y, facing);
-        });
-    }
-
-
-
-    //.size() returns an int. going from 4 bytes to 1 byte, so we need a static cast
-    //const auto count = static_cast<uint8_t>(dirty_players.size());
-    Protocol::Packet batch;
-    Protocol::PacketWriter::WriteByte(batch.payload,
-                                      Protocol::Opcode::Batch::S_RemotePlayer_Update); // should be 20 for client
-    // We can fit about 200 player updates in a standard 1400 byte MTU packet.
-    // If you have more, you'd loop this, but for now let's assume < 200 moves/tick.
-    //Protocol::PacketWriter::WriteByte(batch.payload, count);
-
-    uint8_t processed = 0;
-    for (const auto &player: dirty_players) {
-        Protocol::PacketWriter::WriteUInt64(batch.payload, player->GetID());
-        Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetX()));
-        Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetY()));
-        Protocol::PacketWriter::WriteByte(batch.payload, player->GetFacing());
-        processed++;
-
-        // TODO Split into multiple packets
-        if (processed == 255) { break; }
-    }
-    batch.payload[1] = processed; // Set the number of players in the batch
-
-    //13 bytes per player * 255 = 3315, what is the size of uint16?
-    // Set the size of the payload
-    batch.size = static_cast<uint16_t>(batch.payload.size());
-    auto data = std::make_shared<std::vector<uint8_t>>(batch.ToBytes());
-
-    // Let's implement a playerregistry.GetAllPlayersInRange( X ) to grab a
-    // List of players our player can see to send them updates. is this how it works?
-
-
-
-
-
-    * Packet Batch Example:
-
-    // TODO: this takes every moving players data, builds one packet, and sends it to every connected player
-    // Extremely unnecessary, just a good example of packet coalescing.
-    // Will change it to send to view/etc later
-
-    // --- OPTIMIZATION: PACKET COALESCING ---
-    // Instead of sending N small packets, we build ONE big packet.
-
-    uint8_t count = static_cast<uint8_t>(moving_players.size());
-    Protocol::Packet batchPacket;
-    Protocol::PacketWriter::WriteByte(batchPacket.payload, 0x20);
-
-    // We can fit about 200 player updates in a standard 1400 byte MTU packet.
-    // If you have more, you'd loop this, but for now let's assume < 200 moves/tick.
-    Protocol::PacketWriter::WriteByte(batchPacket.payload, count);
-
-    for (const auto& p : moving_players) {
-        // Append Player ID (4 bytes)
-        Protocol::PacketWriter::WriteUInt(batchPacket.payload, p.player_id);
-        // Append X, Y (2 bytes each)
-        Protocol::PacketWriter::WriteShort(batchPacket.payload, p.x);
-        Protocol::PacketWriter::WriteShort(batchPacket.payload, p.y);
-        // Append Facing
-        Protocol::PacketWriter::WriteByte(batchPacket.payload, p.facing);
-    }
-
-    batchPacket.size = static_cast<uint16_t>(batchPacket.payload.size());
-
-    // Serialize ONCE, send to ALL.
-    // This is incredibly fast because we don't rebuild the vector for every client.
-    auto encoded_bytes = make_shared<std::vector<uint8_t>>(batchPacket.ToBytes());
-
-    for (auto& session : all_receivers) {
-        // In a perfect world, you check 'session->GetPlayerID()'
-        // to avoid sending a player their own movement, but sending it
-        // is actually good for sync correction (anti-cheat).
-        session->RawSend(encoded_bytes);
-    }
-     *
-}*/
-
 /// ============================================================================
 /// VIEW-BASED BROADCASTING
 ///
@@ -327,8 +228,13 @@ void GameServer::ProcessTick() {
 /// ============================================================================
 
 void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player> > &dirty_players) {
-    // Map: viewer_id -> list of dirty players they can see
-    std::unordered_map<uint64_t, std::vector<std::shared_ptr<Player> > > viewer_updates;
+    // Map: client_id -> (viewer_ptr, list of dirty players they can see)
+    // Store viewer pointer to avoid double lookup later
+    struct ViewerData {
+        std::shared_ptr<Player> viewer;
+        std::vector<std::shared_ptr<Player>> updates;
+    };
+    std::unordered_map<uint64_t, ViewerData> viewer_updates;
 
     // For each dirty player, find viewers using spatial hash
     for (const auto &dirty_player: dirty_players) {
@@ -341,30 +247,34 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         auto nearby_viewers = world_.GetPlayersInRange(px, py);
 
         for (const auto &viewer: nearby_viewers) {
-            // Include self - client uses this for server-authoritative position sync
-            viewer_updates[viewer->GetID()].push_back(dirty_player);
+            // Skip self - client already predicted their own move
+            if (viewer->GetID() == dirty_id) continue;
+
+            uint64_t client_id = viewer->GetClientID();
+            auto &data = viewer_updates[client_id];
+            if (!data.viewer) {
+                data.viewer = viewer;  // Store viewer pointer once
+            }
+            data.updates.push_back(dirty_player);
         }
     }
 
     // Send batched packets to each viewer
-    for (auto &[viewer_id, updates]: viewer_updates) {
-        if (updates.empty()) continue;
+    for (auto &[client_id, data]: viewer_updates) {
+        if (data.updates.empty()) continue;
 
-        // Get viewer's player and connection
-        auto viewer = players_.GetByID(viewer_id);
-        if (!viewer) continue;
-
-        auto conn = clients_.GetClientCopy(viewer->GetClientID());
+        // Get connection directly - no need to look up player again
+        auto conn = clients_.GetClientCopy(client_id);
         if (!conn) continue;
 
         // Build batch packet
         Protocol::Packet batch;
         Protocol::PacketWriter::WriteByte(batch.payload,
-                                          Protocol::Opcode::Batch::S_Player_Spatial);
+                                          Protocol::Opcode::Batch::S_Player_Spatial.op);
         Protocol::PacketWriter::WriteByte(batch.payload, 0); // Placeholder for count
 
         uint8_t count = 0;
-        for (const auto &player: updates) {
+        for (const auto &player: data.updates) {
             // Player update: ID (8) + X (2) + Y (2) + Facing (1) = 13 bytes
             Protocol::PacketWriter::WriteUInt64(batch.payload, player->GetID());
             Protocol::PacketWriter::WriteShort(batch.payload, static_cast<uint16_t>(player->GetX()));
@@ -381,8 +291,8 @@ void GameServer::BroadcastDirtyPlayers(const std::vector<std::shared_ptr<Player>
         batch.size = static_cast<uint16_t>(batch.payload.size());
 
         // Send
-        auto data = std::make_shared<std::vector<uint8_t> >(batch.ToBytes());
-        conn->RawSend(data);
+        auto data_bytes = std::make_shared<std::vector<uint8_t>>(batch.ToBytes());
+        conn->RawSend(data_bytes);
     }
 }
 
@@ -390,13 +300,20 @@ void GameServer::OnClientLogin(const std::shared_ptr<ClientConnection> &client) 
     QueueAction([this, client] {
         // Everything below now runs on game thread
 
-
         // Register with client manager
         clients_.AddClient(client);
         const uint64_t client_id = client->GetClientID();
 
         // Create player in registry
         auto player = players_.CreatePlayer(client_id, 0, 0);
+        if (!player) {
+            // CreatePlayer returns nullptr if client already has a player.
+            // This indicates a bug - client logged in twice somehow.
+            // Disconnect to prevent further issues.
+            Log::Error("Failed to create player for client {} - duplicate login?", client_id);
+            client->Disconnect("duplicate login");
+            return;
+        }
 
         // Add to world's spatial hash
         world_.AddPlayer(
@@ -445,13 +362,11 @@ void GameServer::SendPingToAllClients() {
 }
 
 void GameServer::OnClientDisconnect(uint64_t client_id, const std::string &ip) {
-    // TODO by the time this runs on main thread, client could of d/c. that's
-    // why we get a client id here. check when run on main thread
     QueueAction([this, client_id, ip] {
         auto player = players_.GetByClientID(client_id);
         if (player) {
-            // Get player ID before removal
-            uint64_t player_id = players_.GetPlayerIDForClient(client_id);
+            // Capture all needed data BEFORE any removal
+            uint64_t player_id = player->GetID();
             int16_t px = player->GetX();
             int16_t py = player->GetY();
 
@@ -464,18 +379,17 @@ void GameServer::OnClientDisconnect(uint64_t client_id, const std::string &ip) {
             // Remove from registry
             players_.RemoveByClientID(client_id);
 
-            // Notify only nearby players
+            // Notify only nearby players (using captured player_id, not player->)
             for (const auto &viewer: nearby_viewers) {
-                {
-                    if (viewer->GetID() == player_id) continue;
+                if (viewer->GetID() == player_id) continue;
 
-                    auto viewer_conn = clients_.GetClientCopy(viewer->GetClientID());
-                    if (!viewer_conn) continue;
+                auto viewer_conn = clients_.GetClientCopy(viewer->GetClientID());
+                if (!viewer_conn) continue;
 
-                    Packets::PacketSender::PlayerLeft(viewer_conn, player_id);
-                }
-                Log::Info("Player {} disconnected", player_id);
+                Packets::PacketSender::PlayerLeft(viewer_conn, player_id);
             }
+
+            Log::Info("Player {} disconnected", player_id);
         }
 
         // Remove from client manager

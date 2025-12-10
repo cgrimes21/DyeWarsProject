@@ -18,7 +18,7 @@ LuaGameEngine::~LuaGameEngine() {
     }
 }
 
-void LuaGameEngine::OnPlayerMoved(uint32_t player_id, int x, int y, uint8_t direction) {
+void LuaGameEngine::OnPlayerMoved(uint64_t player_id, int x, int y, uint8_t direction) {
     // 1. Lock the Mutex (Thread Safety)
     std::lock_guard<std::mutex> lock(lua_mutex_);
 

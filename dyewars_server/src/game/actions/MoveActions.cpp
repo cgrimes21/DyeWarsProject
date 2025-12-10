@@ -9,12 +9,9 @@ namespace Actions::Movement {
             auto player = server->Players().GetByClientID(client_id);
             if (!player) return;
 
-            // Get client ping for cooldown adjustment
-            uint32_t ping_ms = 0;
+            // Get client connection once - used for ping and potential correction
             auto conn = server->Clients().GetClientCopy(client_id);
-            if (conn) {
-                ping_ms = conn->GetPing();
-            }
+            uint32_t ping_ms = conn ? conn->GetPing() : 0;
 
             auto result = player->AttemptMove(direction, facing, server->GetWorld().GetMap(), ping_ms);
 
@@ -28,7 +25,6 @@ namespace Actions::Movement {
                 // Move failed (collision, cooldown, etc.) - rubber band client back
                 Log::Trace("Player {} move attempt failed: dir={}, facing={}, result={}",
                            player->GetID(), direction, facing, static_cast<int>(result));
-                auto conn = server->Clients().GetClientCopy(client_id);
                 if (conn) {
                     Packets::PacketSender::PositionCorrection(
                             conn,

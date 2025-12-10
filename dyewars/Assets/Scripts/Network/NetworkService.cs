@@ -202,12 +202,5 @@ namespace DyeWars.Network
         /// Get the packet sender for sending custom packets.
         /// </summary>
         public PacketSender GetSender() => sender;
-
-        /// <summary>
-        /// Send a ping to measure latency.
-        /// </summary>
-        public void SendPing() => sender.SendPing();
-        public void SendHeartbeatResponse() { }
-        public void SendSecurityResponse() { }
     }
 }

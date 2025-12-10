@@ -73,21 +73,27 @@ size_t ClientManager::Count() {
 }
 
 /// <summary>
-/// Closes all client connections
+/// Closes all client connections during server shutdown.
 /// </summary>
 void ClientManager::CloseAll() {
     std::unordered_map<uint64_t, std::shared_ptr<ClientConnection>> snapshot;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        snapshot = std::move(clients_);
+        // Use swap instead of move.
+        // std::move leaves clients_ in an "unspecified but valid" state,
+        // which could be non-empty on some implementations.
+        // swap guarantees clients_ is empty and snapshot has the contents.
+        // This is safer if any code accesses clients_ after CloseAll.
+        snapshot.swap(clients_);
     }// Lock released
 
     for (auto &[id, conn]: snapshot) {
         conn->CloseSocket();
     }
-    // Disconnect tries to lock clientmanager, we just deleted it above.
-    // Player registry is in weird state, everything is shutting down.
-    // Closing socket is the move here. We're closing all connections anyway, no need to
-    // Attempt to keep state of lists clean
-    //conn->Disconnect("Mass D/C From ClientManager");
+    // Why CloseSocket and not Disconnect?
+    // Disconnect tries to lock ClientManager and PlayerRegistry to clean up state.
+    // But we're shutting down - those structures are being torn down too.
+    // CloseSocket just closes the TCP connection, which is all we need.
+    // The shared_ptrs in snapshot will be released when this function returns,
+    // cleaning up the ClientConnection objects naturally.
 } // snapshot dies here, dropping all shared_ptrs

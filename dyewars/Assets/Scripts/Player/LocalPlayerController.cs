@@ -97,6 +97,7 @@ namespace DyeWars.Player
             EventBus.Unsubscribe<DirectionInputEvent>(OnDirectionInput);
             EventBus.Unsubscribe<LocalPlayerPositionCorrectedEvent>(OnLocalPlayerPositionCorrected);
             EventBus.Unsubscribe<LocalPlayerFacingChangedEvent>(OnLocalPlayerFacingChanged);
+            StopAllCoroutines();
         }
 
         private void Update()
