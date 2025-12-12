@@ -33,21 +33,25 @@ src/
 ├── main.cpp                     # Entry point, console command loop
 ├── core/
 │   ├── Common.h                 # Common includes and typedefs
-│   └── Log.h                    # spdlog wrapper
+│   ├── Log.h                    # spdlog wrapper
+│   └── ThreadSafety.h           # Thread ownership assertions
 ├── server/
 │   ├── GameServer.h/cpp         # Central server, game loop, action queue
 │   ├── ClientConnection.h/cpp   # Per-client TCP connection handler
-│   └── ClientManager.h/cpp      # Tracks all connected clients
+│   ├── ClientManager.h/cpp      # Tracks all connected clients (real + fake)
+│   ├── FakeClientConnection.h   # Simulated client for bot stress testing
+│   └── IClientConnection.h      # Interface for real/fake connections
 ├── game/
 │   ├── World.h                  # Owns TileMap + SpatialHash + VisibilityTracker
 │   ├── TileMap.h                # Static tile/collision data
-│   ├── SpatialHash.h            # O(1) player position lookups
+│   ├── SpatialHash.h            # O(1) player position lookups (flat grid + hash)
 │   ├── VisibilityTracker.h      # Tracks who each player can see (enter/leave view)
 │   ├── Player.h                 # Player entity, movement validation
 │   ├── PlayerRegistry.h         # Tracks all logged-in players
 │   └── actions/
 │       ├── Actions.h/cpp        # Action dispatcher
-│       └── MoveActions.cpp      # Movement action handlers
+│       ├── MoveActions.cpp      # Movement action handlers
+│       └── BotStressTest.h/cpp  # Bot spawning and movement simulation
 ├── network/
 │   ├── BandwidthMonitor.h       # Traffic statistics
 │   ├── ConnectionLimiter.h/cpp  # Rate limiting, IP bans
@@ -58,6 +62,10 @@ src/
 │       │   └── PacketHandler.h/cpp  # Routes incoming packets
 │       └── outgoing/
 │           └── PacketSender.h   # Builds outgoing packets
+├── debug/
+│   ├── DebugHttpServer.h/cpp    # HTTP server for real-time stats dashboard
+│   ├── ServerStats.h            # Thread-safe stats collection
+│   └── PERFORMANCE_OPTIMIZATIONS.md  # Detailed optimization documentation
 ├── database/
 │   └── DatabaseManager.h/cpp    # SQLite persistence
 └── lua/
@@ -203,11 +211,56 @@ When running the server:
 - `r` - Reload Lua scripts
 - `stats` - Bandwidth and player counts
 - `debug` - Enable trace logging
+- `bots <count> [spread|clustered]` - Spawn stress test bots
+- `nobots` - Remove all bots
 - `exit` - Shutdown
+
+## Debug Dashboard
+
+Access `http://localhost:8082` when server is running for real-time performance metrics:
+- Tick time (avg/max), TPS
+- Connection counts (real/fake/total)
+- Bandwidth (current/avg/total)
+- Bot movement breakdown (spatial/visibility/departure time)
+- Broadcast breakdown (viewer query/client lookup/packet send)
+
+## SpatialHash Architecture
+
+The spatial hash uses a **flat grid** for O(1) cell lookups:
+
+```cpp
+// World constructor initializes flat grid
+spatial_hash_.InitFlatGrid(width, height);
+
+// Queries use direct array indexing instead of hash map
+size_t idx = cy * grid_width_ + cx;
+for (const auto& entity : flat_grid_[idx]) { ... }
+```
+
+**Critical ordering for position updates:**
+```cpp
+// 1. Update player's internal position FIRST
+player->SetPosition(new_x, new_y);
+
+// 2. THEN update spatial hash with new coordinates
+world.UpdatePlayerPosition(player_id, new_x, new_y);
+```
+
+The spatial hash derives the OLD cell from its stored key (not from `GetX()/GetY()` which returns the already-updated position). This prevents entity accumulation bugs.
+
+**Zero-copy iteration for hot paths:**
+```cpp
+// Instead of GetPlayersInRange() which allocates a vector:
+world.ForEachPlayerInRange(x, y, [&](const std::shared_ptr<Player>& p) {
+    // No vector allocation, no shared_ptr copies
+});
+```
 
 ## Key Patterns
 
 - Use `QueueAction()` to safely pass work from IO thread to game thread
 - Player movement must pass `Player::AttemptMove()` validation
-- Broadcast to nearby players via `World::GetPlayersInRange()`
+- Broadcast to nearby players via `World::ForEachPlayerInRange()` (zero-copy) or `World::GetPlayersInRange()` (returns vector)
 - Packet sizes are explicitly defined in `Protocol::PayloadSize`
+- Stats use `std::atomic<double>` for lock-free cross-thread reads
+- See `src/debug/PERFORMANCE_OPTIMIZATIONS.md` for detailed optimization documentation
